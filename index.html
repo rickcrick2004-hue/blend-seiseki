@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BLEND 成績推移トラッカー v1.4</title>
+    <title>BLEND 成績推移トラッカー v1.5</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -166,6 +166,26 @@
                 });
             };
 
+            const handleUpdateCSV = (e) => {
+                if (!selectedExamId) return;
+                const file = e.target.files[0];
+                if (!file) return;
+                if (!window.confirm('現在表示中の試験データをこのCSVファイルで上書き更新しますか？')) {
+                    e.target.value = '';
+                    return;
+                }
+
+                Papa.parse(file, {
+                    header: true,
+                    skipEmptyLines: true,
+                    complete: (results) => {
+                        const data = results.data;
+                        processUpdateCSVData(data, selectedExamId);
+                        e.target.value = '';
+                    }
+                });
+            };
+
             const handleDownloadSampleCSV = (type) => {
                 let csvContent = "";
                 let filename = "";
@@ -207,7 +227,6 @@
                 const newExam = { id: newExamId, name: examName, order: exams.length, type: examType };
                 
                 const newRecords = [];
-                let detectedSubjects = new Set();
 
                 data.forEach(row => {
                     const grade = row['学年'] || '';
@@ -242,7 +261,6 @@
                         
                         if (!isNaN(scoreNum) && val.trim() !== '') {
                             scores[subjectName] = scoreNum;
-                            detectedSubjects.add(subjectName);
                         }
                     });
 
@@ -262,6 +280,76 @@
                 setRecords([...records, ...newRecords]);
                 setActiveTab(examType);
                 setSelectedExamId(newExamId);
+            };
+
+            const processUpdateCSVData = (data, examIdToUpdate) => {
+                const examToUpdate = exams.find(e => e.id === examIdToUpdate);
+                if (!examToUpdate) return;
+
+                let examType = examToUpdate.type || 'regular';
+                if (data.length > 0 && Object.keys(data[0]).some(k => k.includes('全国偏差値') || k.includes('模試') || k.includes('推移調査'))) {
+                    examType = 'benesse';
+                }
+
+                const newExams = exams.map(e => e.id === examIdToUpdate ? { ...e, type: examType } : e);
+                const newRecordsForExam = [];
+
+                data.forEach(row => {
+                    const grade = row['学年'] || '';
+                    const cls = row['組'] || row['クラス'] || '';
+                    const no = row['出席番号'] || row['番号'] || '';
+                    const rawName = row['氏名'] || row['名前'] || '';
+                    
+                    let scholarship = '';
+                    
+                    if (!rawName) return; 
+                    
+                    const studentId = normalizeName(rawName);
+                    const scores = {};
+
+                    Object.keys(row).forEach(key => {
+                        // 奨学生情報を抽出
+                        if (key.includes('奨学生') || key.includes('奨学')) {
+                            const val = (row[key] || '').trim();
+                            if (val.includes('A') || val === '奨A') scholarship = '奨A';
+                            else if (val.includes('B') || val === '奨B') scholarship = '奨B';
+                            else if (val.includes('C') || val === '奨C') scholarship = '奨C';
+                            else scholarship = val;
+                            return;
+                        }
+
+                        if (['学年', '組', 'クラス', '出席番号', '番号', '氏名', '名前'].includes(key)) {
+                            return;
+                        }
+                        const val = row[key];
+                        const subjectName = key.replace('評点', '').trim();
+                        const scoreNum = Number(val);
+                        
+                        if (!isNaN(scoreNum) && val.trim() !== '') {
+                            scores[subjectName] = scoreNum;
+                        }
+                    });
+
+                    newRecordsForExam.push({
+                        examId: examIdToUpdate,
+                        studentId,
+                        rawName,
+                        grade,
+                        class: cls,
+                        no: parseInt(no) || 0,
+                        scholarship,
+                        scores
+                    });
+                });
+
+                const filteredRecords = records.filter(r => r.examId !== examIdToUpdate);
+                setExams(newExams);
+                setRecords([...filteredRecords, ...newRecordsForExam]);
+                
+                if (activeTab !== examType) {
+                    setActiveTab(examType);
+                }
+                alert('表示中の試験データを更新しました。');
             };
 
             const handleClearData = () => {
@@ -619,7 +707,7 @@
                             <div className="bg-blue-600 p-2 rounded-lg">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                             </div>
-                            <h1 className="text-xl font-bold tracking-wider hidden sm:block">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-2">v1.4</span></h1>
+                            <h1 className="text-xl font-bold tracking-wider hidden sm:block">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-2">v1.5</span></h1>
                         </div>
                         <div className="flex items-center gap-4">
                             <div className="bg-slate-800 p-1.5 rounded-md flex items-center gap-2 border border-slate-700">
@@ -739,7 +827,11 @@
                                                 {previousExamId ? '前回比較あり' : '初回データ'}
                                             </p>
                                         </div>
-                                        <div>
+                                        <div className="flex items-center gap-2">
+                                            <label className="cursor-pointer text-sm bg-white hover:bg-slate-50 text-slate-600 font-medium py-1.5 px-3 rounded border border-slate-300 flex items-center gap-1 shadow-sm transition-colors">
+                                                <IconUpload /> 表示中の試験をCSVで上書き
+                                                <input type="file" accept=".csv" className="hidden" onChange={handleUpdateCSV} />
+                                            </label>
                                             <button 
                                                 onClick={handleExportCurrentExamCSV}
                                                 className="text-sm bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold py-1.5 px-3 rounded border border-blue-200 flex items-center gap-1 shadow-sm transition-colors"
