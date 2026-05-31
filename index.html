@@ -246,12 +246,22 @@
             // --- Sync Handlers (Firebase & JSON) ---
 
             const getFirebaseDb = () => {
-                if (!firebaseConfig.trim()) throw new Error('Firebase設定(JSON)が入力されていません。');
+                if (!firebaseConfig.trim()) throw new Error('Firebase設定が入力されていません。');
                 let configObj;
                 try {
-                    configObj = JSON.parse(firebaseConfig);
+                    let str = firebaseConfig.trim();
+                    // 変数宣言ごとコピーしてしまった場合の対策
+                    if (str.includes('const firebaseConfig') || str.includes('=')) {
+                        str = str.substring(str.indexOf('{'), str.lastIndexOf('}') + 1);
+                    }
+                    // キーにダブルクォーテーションがないJavaScriptのオブジェクト形式でも読み込めるようにする
+                    configObj = new Function("return " + str)();
                 } catch (e) {
-                    throw new Error('Firebase設定のJSON形式が不正です。コピーした内容をそのまま貼り付けてください。');
+                    throw new Error('設定の形式が不正です。 { から } までのすべての内容が含まれているか確認してください。');
+                }
+
+                if (!configObj || !configObj.apiKey || !configObj.projectId) {
+                    throw new Error('設定に必要な情報 (apiKey や projectId) が不足しています。全体をコピーできているか確認してください。');
                 }
 
                 if (!firebase.apps.length) {
