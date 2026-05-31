@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BLEND 成績推移トラッカー v1.2</title>
+    <title>BLEND 成績推移トラッカー v1.3</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -72,7 +72,7 @@
         const App = () => {
             // State
             const [exams, setExams] = useState([]); // [{ id, name, type, order }]
-            const [records, setRecords] = useState([]); // [{ examId, studentId, rawName, grade, class, no, scores: {} }]
+            const [records, setRecords] = useState([]); // [{ examId, studentId, rawName, grade, class, no, scholarship, scores: {} }]
             const [activeTab, setActiveTab] = useState('regular'); // 'regular' or 'benesse'
             const [selectedExamId, setSelectedExamId] = useState(null);
             const [selectedStudentId, setSelectedStudentId] = useState(null);
@@ -102,7 +102,6 @@
                 const savedExams = localStorage.getItem('blend_exams');
                 const savedRecords = localStorage.getItem('blend_records');
                 if (savedExams) {
-                    // 旧バージョンのデータにはtypeがないため、'regular'として互換性を保つ
                     const parsedExams = JSON.parse(savedExams).map(e => ({...e, type: e.type || 'regular'}));
                     setExams(parsedExams);
                 }
@@ -171,16 +170,19 @@
                 let csvContent = "";
                 let filename = "";
                 if (type === 'regular') {
-                    csvContent = "学年,組,出席番号,氏名,国語,社会,数学,理科,英語,5教科総点,5教科平均点,5教科学級席次,5教科学年席次,音楽,美術,保体,技家,9教科総点,9教科平均点,9教科学級席次,9教科学年席次\n" +
-                        "1,A,1,荒巻 拓海,61,88,76,86,90,401,80.2,11,21,85,90,80,75,731,81.2,10,20\n" +
-                        "1,A,2,伊藤 大翔,67,57,93,83,74,374,74.8,18,32,80,75,85,80,694,77.1,15,30\n" +
-                        "1,B,3,今古賀 采歩,53,69,69,61,69,321,64.2,24,49,90,85,90,85,671,74.6,18,35";
+                    csvContent = "学年,組,出席番号,氏名,学園奨学生,国語,社会,数学,理科,英語,5教科総点,5教科平均点,5教科学級席次,5教科学年席次,音楽,美術,保体,技家,9教科総点,9教科平均点,9教科学級席次,9教科学年席次\n" +
+                        "1,A,1,荒巻 拓海,,61,88,76,86,90,401,80.2,11,21,85,90,80,75,731,81.2,10,20\n" +
+                        "1,A,2,伊藤 大翔,奨A,67,57,93,83,74,374,74.8,18,32,80,75,85,80,694,77.1,15,30\n" +
+                        "1,B,3,今古賀 采歩,,53,69,69,61,69,321,64.2,24,49,90,85,90,85,671,74.6,18,35\n" +
+                        "1,B,4,大野 颯佑,奨B,84,93,97,97,86,457,91.4,2,3,95,90,95,90,827,91.9,2,3\n" +
+                        "1,A,5,海谷 瑛介,奨C,68,89,88,92,84,421,84.2,7,14,80,85,75,80,741,82.3,8,15";
                     filename = "format_regular.csv";
                 } else if (type === 'benesse') {
-                    csvContent = "学年,組,出席番号,氏名,国語点数,国語全国偏差値,国語学年順位,数学点数,数学全国偏差値,数学学年順位,英語点数,英語全国偏差値,英語学年順位,3教科点数,3教科全国偏差値,3教科学年順位\n" +
-                        "1,A,1,荒巻 拓海,65,55.2,15,70,58.5,10,60,52.1,20,195,56.0,12\n" +
-                        "1,A,2,伊藤 大翔,58,49.8,32,65,54.2,18,72,59.5,8,195,54.8,16\n" +
-                        "1,B,3,今古賀 采歩,72,60.1,8,55,48.2,35,68,56.7,11,195,55.0,15";
+                    csvContent = "学年,組,出席番号,氏名,学園奨学生,国語点数,国語全国偏差値,国語学年順位,数学点数,数学全国偏差値,数学学年順位,英語点数,英語全国偏差値,英語学年順位,3教科点数,3教科全国偏差値,3教科学年順位\n" +
+                        "1,A,1,荒巻 拓海,,65,55.2,15,70,58.5,10,60,52.1,20,195,56.0,12\n" +
+                        "1,A,2,伊藤 大翔,奨A,58,49.8,32,65,54.2,18,72,59.5,8,195,54.8,16\n" +
+                        "1,B,3,今古賀 采歩,,72,60.1,8,55,48.2,35,68,56.7,11,195,55.0,15\n" +
+                        "1,B,4,大野 颯佑,奨B,82,65.3,3,78,63.1,5,80,64.2,4,240,64.2,3";
                     filename = "format_benesse.csv";
                 }
                 
@@ -196,7 +198,6 @@
             };
 
             const processCSVData = (data, examName) => {
-                // ヘッダーを見てベネッセの模試かどうかを自動判定
                 let examType = 'regular';
                 if (data.length > 0 && Object.keys(data[0]).some(k => k.includes('全国偏差値') || k.includes('模試') || k.includes('推移調査'))) {
                     examType = 'benesse';
@@ -214,13 +215,25 @@
                     const no = row['出席番号'] || row['番号'] || '';
                     const rawName = row['氏名'] || row['名前'] || '';
                     
+                    let scholarship = '';
+                    
                     if (!rawName) return; 
                     
                     const studentId = normalizeName(rawName);
                     const scores = {};
 
                     Object.keys(row).forEach(key => {
-                        if (['学年', '組', 'クラス', '出席番号', '番号', '氏名', '名前'].includes(key) || key.includes('奨学生')) {
+                        // 奨学生情報を抽出
+                        if (key.includes('奨学生') || key.includes('奨学')) {
+                            const val = (row[key] || '').trim();
+                            if (val.includes('A') || val === '奨A') scholarship = '奨A';
+                            else if (val.includes('B') || val === '奨B') scholarship = '奨B';
+                            else if (val.includes('C') || val === '奨C') scholarship = '奨C';
+                            else scholarship = val;
+                            return;
+                        }
+
+                        if (['学年', '組', 'クラス', '出席番号', '番号', '氏名', '名前'].includes(key)) {
                             return;
                         }
                         const val = row[key];
@@ -240,13 +253,13 @@
                         grade,
                         class: cls,
                         no: parseInt(no) || 0,
+                        scholarship,
                         scores
                     });
                 });
 
                 setExams([...exams, newExam]);
                 setRecords([...records, ...newRecords]);
-                // 読み込んだ試験のタブに自動で切り替える
                 setActiveTab(examType);
                 setSelectedExamId(newExamId);
             };
@@ -438,6 +451,9 @@
                     } else if (sortConfig.key === 'name') {
                         valA = a.studentId;
                         valB = b.studentId;
+                    } else if (sortConfig.key === 'scholarship') {
+                        valA = a.scholarship || '';
+                        valB = b.scholarship || '';
                     } else if (sortConfig.key.startsWith('score_')) {
                         const subject = sortConfig.key.replace('score_', '');
                         valA = a.scores[subject] ?? -1;
@@ -533,6 +549,46 @@
                 return { studentId: selectedStudentId, rawName, history, stats };
             }, [selectedStudentId, currentExams, records, currentSubjects]);
 
+            // --- CSV Export Handler ---
+            const handleExportCurrentExamCSV = () => {
+                if (!selectedExamId) return;
+                const exam = exams.find(e => e.id === selectedExamId);
+                if (!exam) return;
+
+                if (tableData.length === 0) {
+                    alert('出力するデータがありません。');
+                    return;
+                }
+
+                // 表示順（ソートされている場合はその順序）に合わせてCSVを出力
+                const csvData = tableData.map(r => {
+                    const row = {
+                        '学年': r.grade,
+                        '組': r.class,
+                        '出席番号': r.no,
+                        '氏名': r.rawName,
+                        '学園奨学生': r.scholarship || ''
+                    };
+                    currentSubjects.forEach(sub => {
+                        row[sub] = r.scores[sub] !== undefined ? r.scores[sub] : '';
+                    });
+                    return row;
+                });
+
+                const csvContent = Papa.unparse(csvData);
+                
+                // BOMを追加して文字化けを防止
+                const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+                const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.setAttribute('download', `${exam.name}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
             // --- Render Helpers ---
             const renderDiffText = (diff, subjectName = '', extraClass = '') => {
                 if (diff === undefined || diff === null || isNaN(diff)) return null;
@@ -563,7 +619,7 @@
                             <div className="bg-blue-600 p-2 rounded-lg">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                             </div>
-                            <h1 className="text-xl font-bold tracking-wider hidden sm:block">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-2">v1.2</span></h1>
+                            <h1 className="text-xl font-bold tracking-wider hidden sm:block">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-2">v1.3</span></h1>
                         </div>
                         <div className="flex items-center gap-4">
                             <div className="bg-slate-800 p-1.5 rounded-md flex items-center gap-2 border border-slate-700">
@@ -683,6 +739,14 @@
                                                 {previousExamId ? '前回比較あり' : '初回データ'}
                                             </p>
                                         </div>
+                                        <div>
+                                            <button 
+                                                onClick={handleExportCurrentExamCSV}
+                                                className="text-sm bg-white hover:bg-slate-50 text-slate-600 font-medium py-1.5 px-3 rounded border border-slate-300 flex items-center gap-1 shadow-sm transition-colors"
+                                            >
+                                                <IconDownload /> 表示中の試験をCSV出力
+                                            </button>
+                                        </div>
                                     </div>
                                     
                                     <div className="flex-1 overflow-auto relative">
@@ -697,6 +761,9 @@
                                                     </th>
                                                     <th className="px-4 py-3 sticky left-[160px] top-0 bg-slate-100 cursor-pointer hover:bg-slate-200 border-b border-slate-200 min-w-[160px] w-40 shadow-[2px_0_5px_rgba(0,0,0,0.05)] z-30" onClick={() => handleSort('name')}>
                                                         氏名 {renderSortIcon('name')}
+                                                    </th>
+                                                    <th className="px-2 py-3 cursor-pointer hover:bg-slate-200 border-b border-slate-200 w-12 text-center" onClick={() => handleSort('scholarship')}>
+                                                        奨学 {renderSortIcon('scholarship')}
                                                     </th>
                                                     {currentSubjects.map(sub => (
                                                         <th key={sub} className="px-4 py-3 cursor-pointer hover:bg-slate-200 border-b border-slate-200 w-32 text-center" onClick={() => handleSort(`score_${sub}`)}>
@@ -717,6 +784,13 @@
                                                         </td>
                                                         <td className="px-4 py-2 sticky left-[160px] bg-white group-hover:bg-blue-50/50 min-w-[160px] w-40 font-medium text-slate-800 shadow-[2px_0_5px_rgba(0,0,0,0.02)] truncate z-10">
                                                             {row.rawName}
+                                                        </td>
+                                                        <td className="px-2 py-2 text-center text-xs font-bold border-l border-slate-50">
+                                                            {row.scholarship && (
+                                                                <span className="bg-amber-100 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded shadow-sm">
+                                                                    {row.scholarship}
+                                                                </span>
+                                                            )}
                                                         </td>
                                                         {currentSubjects.map(sub => {
                                                             const score = row.scores[sub];
@@ -739,7 +813,7 @@
                                                 ))}
                                                 {tableData.length === 0 && (
                                                     <tr>
-                                                        <td colSpan={currentSubjects.length + 4} className="px-4 py-8 text-center text-slate-500">
+                                                        <td colSpan={currentSubjects.length + 5} className="px-4 py-8 text-center text-slate-500">
                                                             データがありません
                                                         </td>
                                                     </tr>
@@ -753,6 +827,7 @@
                                                         <td className="px-4 py-3 sticky left-[160px] bottom-0 bg-slate-100 text-right border-t border-slate-300 shadow-[2px_0_5px_rgba(0,0,0,0.05)] z-50">
                                                             全体平均
                                                         </td>
+                                                        <td className="px-2 py-3 border-t border-slate-300 bg-slate-100 z-40"></td>
                                                         {currentSubjects.map(sub => (
                                                             <td key={sub} className="px-2 py-3 text-center border-t border-slate-300 border-l border-slate-200">
                                                                 {averages[sub] !== null ? Number(averages[sub]).toFixed(1) : '-'}
@@ -971,6 +1046,7 @@
                                                     <tr>
                                                         <th className="px-4 py-3 font-medium text-left sticky left-0 bg-slate-100 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]">試験名</th>
                                                         <th className="px-4 py-3 font-medium bg-blue-50/50">クラス/番号</th>
+                                                        <th className="px-2 py-3 font-medium bg-blue-50/50">奨学</th>
                                                         {currentSubjects.map(sub => (
                                                             <th key={sub} className="px-4 py-3 font-medium">{sub}</th>
                                                         ))}
@@ -982,7 +1058,7 @@
                                                             return (
                                                                 <tr key={h.examId} className="bg-slate-50/50">
                                                                     <td className="px-4 py-3 text-left font-medium text-slate-500 sticky left-0 bg-slate-50/90 z-10">{h.examName}</td>
-                                                                    <td colSpan={currentSubjects.length + 1} className="px-4 py-3 text-slate-400 italic">データなし</td>
+                                                                    <td colSpan={currentSubjects.length + 2} className="px-4 py-3 text-slate-400 italic">データなし</td>
                                                                 </tr>
                                                             );
                                                         }
@@ -997,6 +1073,9 @@
                                                                 </td>
                                                                 <td className={`px-4 py-3 font-mono text-xs bg-blue-50/10 ${h.record.class === 'A' ? 'text-red-600 font-bold' : h.record.class === 'B' ? 'text-blue-600 font-bold' : 'text-slate-500'}`}>
                                                                     {h.record.grade}-{h.record.class}-{h.record.no.toString().padStart(2, '0')}
+                                                                </td>
+                                                                <td className="px-2 py-3 text-center text-xs font-bold bg-blue-50/10 border-r border-white">
+                                                                    {h.record.scholarship && <span className="text-amber-600">{h.record.scholarship}</span>}
                                                                 </td>
                                                                 {currentSubjects.map(sub => {
                                                                     const score = h.record.scores[sub];
