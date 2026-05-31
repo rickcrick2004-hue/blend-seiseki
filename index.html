@@ -4,16 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BLEND 成績推移トラッカー</title>
-    <!-- React & ReactDOM -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-    <!-- Babel for JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- PapaParse for CSV -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-    <!-- Firebase SDK (Compat) -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     
@@ -76,8 +71,8 @@
         // --- Main Application Component ---
         const App = () => {
             // State
-            const [exams, setExams] = useState([]); // [{ id, name, order }]
-            const [records, setRecords] = useState([]); // [{ examId, studentId, rawName, grade, class, no, scores: {} }]
+            const [exams, setExams] = useState([]); 
+            const [records, setRecords] = useState([]); 
             const [selectedExamId, setSelectedExamId] = useState(null);
             const [selectedStudentId, setSelectedStudentId] = useState(null);
             const [sortConfig, setSortConfig] = useState({ key: 'class_no', direction: 'asc' });
@@ -256,7 +251,7 @@
                 try {
                     configObj = JSON.parse(firebaseConfig);
                 } catch (e) {
-                    throw new Error('Firebase設定のJSON形式が不正です。');
+                    throw new Error('Firebase設定のJSON形式が不正です。コピーした内容をそのまま貼り付けてください。');
                 }
 
                 if (!firebase.apps.length) {
@@ -274,7 +269,6 @@
                 if (!syncId.trim()) return alert('Sync IDを入力してください。');
                 try {
                     const db = getFirebaseDb();
-                    // Firebase Firestoreのルールで弾かれる可能性があるため、エラーをキャッチ
                     await db.collection('blend_sync_data').doc(syncId).set({
                         exams,
                         records,
@@ -283,7 +277,7 @@
                     alert(`Sync ID: [${syncId}] にデータを保存(上書き)しました。`);
                 } catch (error) {
                     console.error(error);
-                    alert('保存に失敗しました。Firebaseのセキュリティルール等をご確認ください。\n\n詳細: ' + error.message);
+                    alert('保存に失敗しました。\n\n詳細: ' + error.message);
                 }
             };
 
@@ -340,7 +334,7 @@
                     } catch (error) {
                         alert('JSONファイルの読み込みに失敗しました。');
                     }
-                    e.target.value = ''; // リセット
+                    e.target.value = ''; 
                 };
                 reader.readAsText(file);
             };
@@ -727,17 +721,28 @@
                                                     disabled={!isFirebaseEnabled}
                                                 ></textarea>
                                                 
-                                                <button 
-                                                    onClick={() => {
-                                                        if(firebaseConfig && window.confirm('入力された設定をクリアしますか？\n(入力内容は自動保存されています)')) {
-                                                            setFirebaseConfig('');
-                                                        }
-                                                    }}
-                                                    disabled={!isFirebaseEnabled}
-                                                    className="w-full bg-slate-800 text-white font-bold py-2 rounded shadow hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                                >
-                                                    保存/クリア
-                                                </button>
+                                                <div className="flex gap-2">
+                                                    <button 
+                                                        onClick={() => {
+                                                            if(firebaseConfig) alert('Firebase設定はブラウザに自動保存されています。\nこのままSync IDを入力して「上書き / 取得」を行ってください。');
+                                                        }}
+                                                        disabled={!isFirebaseEnabled || !firebaseConfig}
+                                                        className="flex-1 bg-slate-800 text-white font-bold py-2 rounded shadow hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+                                                    >
+                                                        保存確認
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => {
+                                                            if(firebaseConfig && window.confirm('入力されたFirebase設定をクリアしますか？')) {
+                                                                setFirebaseConfig('');
+                                                            }
+                                                        }}
+                                                        disabled={!isFirebaseEnabled || !firebaseConfig}
+                                                        className="w-16 bg-slate-200 text-slate-700 font-bold py-2 rounded shadow hover:bg-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+                                                    >
+                                                        クリア
+                                                    </button>
+                                                </div>
                                             </div>
                                         )}
                                     </div>
