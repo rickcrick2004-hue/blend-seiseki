@@ -293,12 +293,12 @@
                         "1,B,4,大野 颯佑,奨B,82,65.3,3,78,63.1,5,80,64.2,4,240,64.2,3";
                     filename = "format_benesse.csv";
                 } else if (type === 'comprehensive') {
-                    csvContent = "学年,組,出席番号,氏名,学園奨学生,国語評点,社会評点,数学評点,理科評点,英語評点,音楽評点,美術評点,保体評点,技家評点,9教科評点合計,9教科評点平均\n" +
-                        "1,A,1,荒巻 拓海,,3,4,3,4,4,4,5,4,3,34,3.7\n" +
-                        "1,A,2,伊藤 大翔,奨A,4,3,5,4,4,4,4,5,4,37,4.1\n" +
-                        "1,B,3,今古賀 采歩,,3,3,3,3,3,5,4,5,4,33,3.6\n" +
-                        "1,B,4,大野 颯佑,奨B,5,5,5,5,4,5,5,5,5,44,4.8\n" +
-                        "1,A,5,海谷 瑛介,奨C,4,5,4,5,4,4,4,4,4,38,4.2";
+                    csvContent = "学年,組,出席番号,氏名,学園奨学生,国語,社会,数学,理科,英語,5教科総点,5教科平均点,5教科学級席次,5教科学年席次,音楽,美術,保体,技家,9教科総点,9教科平均点,9教科学級席次,9教科学年席次\n" +
+                        "1,A,1,荒巻 拓海,,61,88,76,86,90,401,80.2,11,21,85,90,80,75,731,81.2,10,20\n" +
+                        "1,A,2,伊藤 大翔,奨A,67,57,93,83,74,374,74.8,18,32,80,75,85,80,694,77.1,15,30\n" +
+                        "1,B,3,今古賀 采歩,,53,69,69,61,69,321,64.2,24,49,90,85,90,85,671,74.6,18,35\n" +
+                        "1,B,4,大野 颯佑,奨B,84,93,97,97,86,457,91.4,2,3,95,90,95,90,827,91.9,2,3\n" +
+                        "1,A,5,海谷 瑛介,奨C,68,89,88,92,84,421,84.2,7,14,80,85,75,80,741,82.3,8,15";
                     filename = "format_comprehensive.csv";
                 }
                 
@@ -315,13 +315,12 @@
 
             const processCSVData = (data, examName) => {
                 let examType = 'regular';
-                if (data.length > 0) {
-                    const keys = Object.keys(data[0]);
-                    if (keys.some(k => k.includes('偏差値') || k.includes('模試') || k.includes('推移調査'))) {
-                        examType = 'benesse';
-                    } else if (keys.some(k => k.includes('評点') || k.includes('学期総合'))) {
-                        examType = 'comprehensive';
-                    }
+                if (data.length > 0 && Object.keys(data[0]).some(k => k.includes('偏差値') || k.includes('模試') || k.includes('推移調査'))) {
+                    examType = 'benesse';
+                }
+                // 入力された試験名に「総合」が含まれていれば「学期総合」タブへ
+                if (examName && (examName.includes('総合') || examName.includes('学期総合'))) {
+                    examType = 'comprehensive';
                 }
 
                 const newExamId = generateId();
@@ -396,13 +395,12 @@
                 if (!examToUpdate) return;
 
                 let examType = examToUpdate.type || 'regular';
-                if (data.length > 0) {
-                    const keys = Object.keys(data[0]);
-                    if (keys.some(k => k.includes('偏差値') || k.includes('模試') || k.includes('推移調査'))) {
-                        examType = 'benesse';
-                    } else if (keys.some(k => k.includes('評点') || k.includes('学期総合'))) {
-                        examType = 'comprehensive';
-                    }
+                if (data.length > 0 && Object.keys(data[0]).some(k => k.includes('偏差値') || k.includes('模試') || k.includes('推移調査'))) {
+                    examType = 'benesse';
+                }
+                // 既存の試験名に「総合」が含まれていれば「学期総合」タブへ
+                if (examToUpdate.name && (examToUpdate.name.includes('総合') || examToUpdate.name.includes('学期総合'))) {
+                    examType = 'comprehensive';
                 }
 
                 const newExams = exams.map(e => e.id === examIdToUpdate ? { ...e, type: examType } : e);
@@ -1019,7 +1017,7 @@
                                 <div className="bg-blue-600 p-2 rounded-lg">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                                 </div>
-                                <h1 className="text-xl font-bold tracking-wider hidden sm:block">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-2">v2.10</span></h1>
+                                <h1 className="text-xl font-bold tracking-wider hidden sm:block">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-2">v2.12</span></h1>
                             </div>
                             <div className="flex items-center gap-4">
                                 <div className="bg-slate-800 p-1.5 rounded-md flex items-center gap-2 border border-slate-700">
