@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BLEND 成績推移トラッカー v2.11</title>
+    <title>BLEND 成績推移トラッカー v3.0</title>
     <!-- React & Babelのバージョンを安定版に固定 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
@@ -38,16 +38,24 @@
             .print-only { display: none !important; }
         }
         @media print {
-            @page { size: A4 portrait; margin: 15mm; }
+            @page { size: A4 portrait; margin: 10mm; }
             body { 
                 background-color: white !important; 
                 margin: 0; padding: 0; 
                 -webkit-print-color-adjust: exact; 
                 print-color-adjust: exact; 
+                font-size: 10px;
             }
             .no-print { display: none !important; }
             .print-only { display: block !important; }
             .page-break { page-break-after: always; break-after: page; }
+            
+            /* 要素の途中で改ページされるのを防ぐ設定 */
+            .avoid-break { 
+                page-break-inside: avoid !important; 
+                break-inside: avoid !important; 
+            }
+            
             /* 印刷時はスクロールバー非表示 */
             ::-webkit-scrollbar { display: none; }
         }
@@ -56,7 +64,6 @@
 <body class="bg-slate-50 text-slate-800 font-sans min-h-screen">
     <div id="root"></div>
 
-    <!-- data-presets="react" を指定してBabelの予期せぬモジュール読み込みを防ぐ -->
     <script type="text/babel" data-presets="react">
         const { useState, useEffect, useMemo, useRef } = React;
 
@@ -87,11 +94,7 @@
             '国語点数', '国語偏差値', '国語学年順位',
             '数学点数', '数学偏差値', '数学学年順位',
             '英語点数', '英語偏差値', '英語学年順位',
-            '3教科点数', '3教科偏差値', '3教科学年順位',
-            // 学期総合 (評点など) - 定期試験と同じ科目が使われることが多いが念のため独立して定義可能に
-            '国語評点', '社会評点', '数学評点', '理科評点', '英語評点',
-            '音楽評点', '美術評点', '保体評点', '技家評点',
-            '9教科評点合計', '9教科評点平均'
+            '3教科点数', '3教科偏差値', '3教科学年順位'
         ];
 
         // 過去のデータから「全国」という文字を取り除くためのマイグレーション関数
@@ -109,7 +112,13 @@
             });
         };
 
-        // --- SVG Icons ---
+        // 実技教科・9教科系かどうかの判定 (表を2段に分けるために使用)
+        const isSubSubject = (subjectName) => {
+            const subs = ['音楽', '美術', '保体', '技家', '9教科'];
+            return subs.some(s => subjectName.includes(s));
+        };
+
+        // --- STREAMING_CHUNK:Defining SVG Icons... ---
         const IconMenu = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>;
         const IconUpload = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
         const IconDownload = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
@@ -127,7 +136,7 @@
         const IconFileJson = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M10 12a1 1 0 0 0-1 1v1a1 1 0 0 1-1 1 1 1 0 0 1 1 1v1a1 1 0 0 0 1 1"></path><path d="M14 18a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1 1 1 0 0 1-1-1v-1a1 1 0 0 0-1-1"></path></svg>;
         const IconPrinter = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>;
 
-        // --- Main Application Component ---
+        // --- STREAMING_CHUNK:Initializing React Component... ---
         const App = () => {
             // State
             const [exams, setExams] = useState([]); // [{ id, name, type, order }]
@@ -140,7 +149,8 @@
             // UI State
             const [importExamName, setImportExamName] = useState('');
             const [isDlMenuOpen, setIsDlMenuOpen] = useState(false);
-            const [isPrintingAll, setIsPrintingAll] = useState(false);
+            const [isPrinting, setIsPrinting] = useState(false);
+            const [printTargetId, setPrintTargetId] = useState(null); // 'ALL' or studentId
             const [isSidebarOpen, setIsSidebarOpen] = useState(true);
             const fileInputRef = useRef(null);
 
@@ -162,7 +172,7 @@
                 return () => document.removeEventListener('click', handleClickOutside);
             }, []);
 
-            // Load data from localStorage on mount with Error Handling
+            // --- STREAMING_CHUNK:Loading Data from LocalStorage... ---
             useEffect(() => {
                 try {
                     const savedExams = localStorage.getItem('blend_exams');
@@ -212,7 +222,6 @@
             // Set initial selected exam when tab changes or exam list updates
             useEffect(() => {
                 if (currentExams.length > 0) {
-                    // find() は未定義を返す可能性があるので undefined チェックを行う
                     let found = false;
                     for (let i = 0; i < currentExams.length; i++) {
                         if (currentExams[i].id === selectedExamId) {
@@ -228,12 +237,12 @@
                 }
             }, [currentExams, selectedExamId]);
 
-            // --- Handlers ---
+            // --- STREAMING_CHUNK:Event Handlers for CSV & Data... ---
             const handleImportCSV = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
                 if (!importExamName.trim()) {
-                    alert('試験名を入力してください（例：1年1学期中間、第1回学力推移、1年1学期総合）');
+                    alert('試験名を入力してください（例：1年1学期中間、第1回学力推移調査、1学期総合）');
                     if (fileInputRef && fileInputRef.current) {
                         fileInputRef.current.value = '';
                     }
@@ -277,14 +286,14 @@
             const handleDownloadSampleCSV = (type) => {
                 let csvContent = "";
                 let filename = "";
-                if (type === 'regular') {
+                if (type === 'regular' || type === 'comprehensive') {
                     csvContent = "学年,組,出席番号,氏名,学園奨学生,国語,社会,数学,理科,英語,5教科総点,5教科平均点,5教科学級席次,5教科学年席次,音楽,美術,保体,技家,9教科総点,9教科平均点,9教科学級席次,9教科学年席次\n" +
                         "1,A,1,荒巻 拓海,,61,88,76,86,90,401,80.2,11,21,85,90,80,75,731,81.2,10,20\n" +
                         "1,A,2,伊藤 大翔,奨A,67,57,93,83,74,374,74.8,18,32,80,75,85,80,694,77.1,15,30\n" +
                         "1,B,3,今古賀 采歩,,53,69,69,61,69,321,64.2,24,49,90,85,90,85,671,74.6,18,35\n" +
                         "1,B,4,大野 颯佑,奨B,84,93,97,97,86,457,91.4,2,3,95,90,95,90,827,91.9,2,3\n" +
                         "1,A,5,海谷 瑛介,奨C,68,89,88,92,84,421,84.2,7,14,80,85,75,80,741,82.3,8,15";
-                    filename = "format_regular.csv";
+                    filename = `format_${type}.csv`;
                 } else if (type === 'benesse') {
                     csvContent = "学年,組,出席番号,氏名,学園奨学生,国語点数,国語偏差値,国語学年順位,数学点数,数学偏差値,数学学年順位,英語点数,英語偏差値,英語学年順位,3教科点数,3教科偏差値,3教科学年順位\n" +
                         "1,A,1,荒巻 拓海,,65,55.2,15,70,58.5,10,60,52.1,20,195,56.0,12\n" +
@@ -292,14 +301,6 @@
                         "1,B,3,今古賀 采歩,,72,60.1,8,55,48.2,35,68,56.7,11,195,55.0,15\n" +
                         "1,B,4,大野 颯佑,奨B,82,65.3,3,78,63.1,5,80,64.2,4,240,64.2,3";
                     filename = "format_benesse.csv";
-                } else if (type === 'comprehensive') {
-                    csvContent = "学年,組,出席番号,氏名,学園奨学生,国語,社会,数学,理科,英語,5教科総点,5教科平均点,5教科学級席次,5教科学年席次,音楽,美術,保体,技家,9教科総点,9教科平均点,9教科学級席次,9教科学年席次\n" +
-                        "1,A,1,荒巻 拓海,,61,88,76,86,90,401,80.2,11,21,85,90,80,75,731,81.2,10,20\n" +
-                        "1,A,2,伊藤 大翔,奨A,67,57,93,83,74,374,74.8,18,32,80,75,85,80,694,77.1,15,30\n" +
-                        "1,B,3,今古賀 采歩,,53,69,69,61,69,321,64.2,24,49,90,85,90,85,671,74.6,18,35\n" +
-                        "1,B,4,大野 颯佑,奨B,84,93,97,97,86,457,91.4,2,3,95,90,95,90,827,91.9,2,3\n" +
-                        "1,A,5,海谷 瑛介,奨C,68,89,88,92,84,421,84.2,7,14,80,85,75,80,741,82.3,8,15";
-                    filename = "format_comprehensive.csv";
                 }
                 
                 const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
@@ -318,14 +319,12 @@
                 if (data.length > 0 && Object.keys(data[0]).some(k => k.includes('偏差値') || k.includes('模試') || k.includes('推移調査'))) {
                     examType = 'benesse';
                 }
-                // 入力された試験名に「総合」が含まれていれば「学期総合」タブへ
                 if (examName && (examName.includes('総合') || examName.includes('学期総合'))) {
                     examType = 'comprehensive';
                 }
 
                 const newExamId = generateId();
                 const newExam = { id: newExamId, name: examName, order: exams.length, type: examType };
-                
                 const newRecords = [];
 
                 data.forEach(row => {
@@ -342,7 +341,6 @@
                     const scores = {};
 
                     Object.keys(row).forEach(key => {
-                        // 奨学生情報を抽出
                         if (key.includes('奨学生') || key.includes('奨学')) {
                             const val = (row[key] || '').trim();
                             if (val.includes('A') || val === '奨A') scholarship = '奨A';
@@ -357,8 +355,7 @@
                         }
                         
                         const val = row[key];
-                        // 評点はそのまま残すか、「全国」という文字があれば削除
-                        const subjectName = key.replace('全国', '').trim();
+                        const subjectName = key.replace('評点', '').replace('全国', '').trim();
                         const scoreNum = Number(val);
                         
                         if (!isNaN(scoreNum) && val.trim() !== '') {
@@ -367,14 +364,7 @@
                     });
 
                     newRecords.push({
-                        examId: newExamId,
-                        studentId,
-                        rawName,
-                        grade,
-                        class: cls,
-                        no: parseInt(no) || 0,
-                        scholarship,
-                        scores
+                        examId: newExamId, studentId, rawName, grade, class: cls, no: parseInt(no) || 0, scholarship, scores
                     });
                 });
 
@@ -398,7 +388,6 @@
                 if (data.length > 0 && Object.keys(data[0]).some(k => k.includes('偏差値') || k.includes('模試') || k.includes('推移調査'))) {
                     examType = 'benesse';
                 }
-                // 既存の試験名に「総合」が含まれていれば「学期総合」タブへ
                 if (examToUpdate.name && (examToUpdate.name.includes('総合') || examToUpdate.name.includes('学期総合'))) {
                     examType = 'comprehensive';
                 }
@@ -413,14 +402,11 @@
                     const rawName = row['氏名'] || row['名前'] || '';
                     
                     let scholarship = '';
-                    
                     if (!rawName) return; 
-                    
                     const studentId = normalizeName(rawName);
                     const scores = {};
 
                     Object.keys(row).forEach(key => {
-                        // 奨学生情報を抽出
                         if (key.includes('奨学生') || key.includes('奨学')) {
                             const val = (row[key] || '').trim();
                             if (val.includes('A') || val === '奨A') scholarship = '奨A';
@@ -435,7 +421,7 @@
                         }
                         
                         const val = row[key];
-                        const subjectName = key.replace('全国', '').trim();
+                        const subjectName = key.replace('評点', '').replace('全国', '').trim();
                         const scoreNum = Number(val);
                         
                         if (!isNaN(scoreNum) && val.trim() !== '') {
@@ -444,14 +430,7 @@
                     });
 
                     newRecordsForExam.push({
-                        examId: examIdToUpdate,
-                        studentId,
-                        rawName,
-                        grade,
-                        class: cls,
-                        no: parseInt(no) || 0,
-                        scholarship,
-                        scores
+                        examId: examIdToUpdate, studentId, rawName, grade, class: cls, no: parseInt(no) || 0, scholarship, scores
                     });
                 });
 
@@ -506,8 +485,7 @@
                 }
             };
 
-            // --- Sync Handlers (Firebase & JSON) ---
-
+            // --- STREAMING_CHUNK:Firebase Sync Logic... ---
             const getFirebaseDb = () => {
                 if (!firebaseConfig.trim()) throw new Error('Firebase設定が入力されていません。');
                 let configObj;
@@ -561,10 +539,7 @@
                     if (doc.exists) {
                         const data = doc.data();
                         setExams(data.exams || []);
-                        
-                        // クラウドから読み込んだデータからも「全国」の文字を削除してセット
                         setRecords(migrateRecords(data.records || []));
-                        
                         alert('クラウドからデータを取得しました。');
                     } else {
                         alert('指定されたSync IDのデータが見つかりません。');
@@ -600,10 +575,7 @@
                         const data = JSON.parse(event.target.result);
                         if (data.exams !== undefined && data.records !== undefined) {
                             setExams(data.exams.map(ex => ({...ex, type: ex.type || 'regular'})));
-                            
-                            // JSONから読み込んだデータからも「全国」の文字を削除してセット
                             setRecords(migrateRecords(data.records));
-                            
                             alert('JSONファイルからデータを復元しました。');
                         } else {
                             alert('未対応のJSONフォーマットです。');
@@ -616,8 +588,7 @@
                 reader.readAsText(file);
             };
 
-            // --- Data Processing for View ---
-            
+            // --- STREAMING_CHUNK:Processing Table Data... ---
             const currentSubjects = useMemo(() => {
                 if (!selectedExamId) return [];
                 const examRecords = records.filter(r => r.examId === selectedExamId);
@@ -627,22 +598,17 @@
                 });
                 
                 const subArray = Array.from(subjects);
-                
-                // 固定の順序でソート
                 subArray.sort((a, b) => {
                     const idxA = SUBJECT_ORDER.indexOf(a);
                     const idxB = SUBJECT_ORDER.indexOf(b);
                     if (idxA !== -1 && idxB !== -1) return idxA - idxB;
                     if (idxA !== -1) return -1;
                     if (idxB !== -1) return 1;
-                    // 両方見つからない場合は文字列比較
                     return a.localeCompare(b);
                 });
-
                 return subArray;
             }, [records, selectedExamId]);
 
-            // 前回の試験は、現在選択している「同じタブ（type）」の中から直前のものを取得する
             const previousExamId = useMemo(() => {
                 if (!selectedExamId || currentExams.length <= 1) return null;
                 const idx = currentExams.findIndex(e => e.id === selectedExamId);
@@ -668,7 +634,6 @@
                         }
                     }
                     const diffs = {};
-                    
                     currentSubjects.forEach(sub => {
                         const currentScore = curr.scores[sub];
                         if (prev && prev.scores[sub] !== undefined && currentScore !== undefined) {
@@ -693,13 +658,12 @@
                         valA = a.studentId;
                         valB = b.studentId;
                     } else if (sortConfig.key === 'scholarship') {
-                        // 空欄よりも先にA,B,Cの順で並べるための独自ソート順位を付与
                         const getRank = (val) => {
-                            if (!val) return 99; // 空欄は一番下
+                            if (!val) return 99; 
                             if (val.includes('A') || val === '奨A') return 1;
                             if (val.includes('B') || val === '奨B') return 2;
                             if (val.includes('C') || val === '奨C') return 3;
-                            return 4; // その他の文字が入っている場合
+                            return 4; 
                         };
                         valA = getRank(a.scholarship);
                         valB = getRank(b.scholarship);
@@ -708,7 +672,6 @@
                         if (sortConfig.direction === 'diff_desc' || sortConfig.direction === 'diff_asc') {
                             const diffA = a.diffs[subject];
                             const diffB = b.diffs[subject];
-                            // 差分データがない場合は一番下に配置する
                             if (diffA === undefined && diffB !== undefined) return 1;
                             if (diffA !== undefined && diffB === undefined) return -1;
                             if (diffA === undefined && diffB === undefined) return 0;
@@ -726,7 +689,6 @@
                 });
             }, [records, selectedExamId, previousExamId, currentSubjects, sortConfig]);
 
-            // 受験者数：定期は「国・社・数・理・英」、ベネッセは「国語点数・数学点数・英語点数」が揃っているか
             const examineeCount = useMemo(() => {
                 if (!selectedExamId) return 0;
                 let foundExam = null;
@@ -736,35 +698,22 @@
                         break;
                     }
                 }
-                
-                let coreSubjects = ['国語', '社会', '数学', '理科', '英語']; // Default to regular
-                if (foundExam) {
-                    if (foundExam.type === 'benesse') {
-                        coreSubjects = ['国語点数', '数学点数', '英語点数'];
-                    } else if (foundExam.type === 'comprehensive') {
-                        // 学期総合はデータの中にどのようなキーが存在するかで動的に判定
-                        if (currentSubjects.includes('国語評点')) {
-                            coreSubjects = ['国語評点', '社会評点', '数学評点', '理科評点', '英語評点'];
-                        }
-                    }
-                }
-
+                const isBenesse = foundExam && foundExam.type === 'benesse';
+                const coreSubjects = isBenesse ? ['国語点数', '数学点数', '英語点数'] : ['国語', '社会', '数学', '理科', '英語'];
                 const currentRecords = records.filter(r => r.examId === selectedExamId);
                 return currentRecords.filter(r => {
                     return coreSubjects.every(sub => r.scores[sub] !== undefined && r.scores[sub] !== null);
                 }).length;
-            }, [records, selectedExamId, exams, currentSubjects]);
+            }, [records, selectedExamId, exams]);
 
             const averages = useMemo(() => {
                 if (!selectedExamId) return {};
                 const currentRecords = records.filter(r => r.examId === selectedExamId);
-                
                 const sums = {};
                 const counts = {};
                 
                 currentSubjects.forEach(sub => {
-                    sums[sub] = 0;
-                    counts[sub] = 0;
+                    sums[sub] = 0; counts[sub] = 0;
                 });
 
                 currentRecords.forEach(r => {
@@ -788,66 +737,113 @@
                 return avgs;
             }, [records, selectedExamId, currentSubjects]);
 
-            // --- 個人表（統計サマリー）のデータ生成ロジック ---
-            const getStudentStats = (studentId) => {
-                const history = currentExams.map(exam => {
-                    let rec = null;
-                    for (let i = 0; i < records.length; i++) {
-                        if (records[i].examId === exam.id && records[i].studentId === studentId) {
-                            rec = records[i];
-                            break;
-                        }
-                    }
-                    return {
-                        examId: exam.id,
-                        examName: exam.name,
-                        record: rec || null
-                    };
-                });
+            // --- STREAMING_CHUNK:Generating Comprehensive Student Reports... ---
+            
+            // 全タブ（定期・学推・総合）の成績推移データを一括生成する関数
+            const getComprehensiveStudentReport = (studentId) => {
+                const reportSections = [];
+                const tabTypes = ['regular', 'benesse', 'comprehensive'];
 
-                let foundRec = null;
-                for (let i = 0; i < history.length; i++) {
-                    if (history[i].record) {
-                        foundRec = history[i];
-                        break;
-                    }
-                }
-                const rawName = (foundRec && foundRec.record && foundRec.record.rawName) ? foundRec.record.rawName : studentId;
-                
-                const stats = {};
-                history.forEach(h => {
-                    if (h.record) {
-                        Object.entries(h.record.scores).forEach(([sub, score]) => {
-                            // currentSubjectsに含まれる科目のみを統計に含める
-                            if (currentSubjects.includes(sub)) {
+                tabTypes.forEach(type => {
+                    const typeExams = exams.filter(e => e.type === type);
+                    if (typeExams.length === 0) return;
+
+                    // この試験種別で生徒が受験した全科目を抽出
+                    const typeRecords = records.filter(r => typeExams.some(e => e.id === r.examId));
+                    const subjectsSet = new Set();
+                    typeRecords.filter(r => r.studentId === studentId).forEach(r => {
+                        Object.keys(r.scores).forEach(s => subjectsSet.add(s));
+                    });
+                    
+                    const subjectsArray = Array.from(subjectsSet).sort((a, b) => {
+                        const idxA = SUBJECT_ORDER.indexOf(a);
+                        const idxB = SUBJECT_ORDER.indexOf(b);
+                        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                        if (idxA !== -1) return -1;
+                        if (idxB !== -1) return 1;
+                        return a.localeCompare(b);
+                    });
+
+                    if (subjectsArray.length === 0) return;
+
+                    // 主要教科と実技(9教科系)に分割
+                    const mainSubjects = subjectsArray.filter(sub => !isSubSubject(sub));
+                    const subSubjects = subjectsArray.filter(sub => isSubSubject(sub));
+
+                    const history = typeExams.map(exam => {
+                        let rec = null;
+                        for(let i=0; i<typeRecords.length; i++){
+                            if(typeRecords[i].examId === exam.id && typeRecords[i].studentId === studentId){
+                                rec = typeRecords[i];
+                                break;
+                            }
+                        }
+                        return {
+                            examId: exam.id,
+                            examName: exam.name,
+                            record: rec || null
+                        };
+                    });
+
+                    const rawName = history.find(h => h.record)?.record?.rawName || studentId;
+                    const stats = {};
+                    history.forEach(h => {
+                        if (h.record) {
+                            Object.entries(h.record.scores).forEach(([sub, score]) => {
                                 if (!stats[sub]) {
-                                    stats[sub] = { max: score, min: score, sum: 0, count: 0, history: [] };
+                                    stats[sub] = { max: score, min: score, sum: 0, count: 0 };
                                 }
                                 stats[sub].max = Math.max(stats[sub].max, score);
                                 stats[sub].min = Math.min(stats[sub].min, score);
                                 stats[sub].sum += score;
                                 stats[sub].count += 1;
-                            }
-                        });
+                            });
+                        }
+                    });
+
+                    Object.keys(stats).forEach(sub => {
+                        stats[sub].avg = (stats[sub].sum / stats[sub].count).toFixed(1);
+                    });
+
+                    let title = '定期試験';
+                    let colorClass = 'bg-blue-500';
+                    let titleColor = 'text-blue-800';
+                    if (type === 'benesse') {
+                        title = '学力推移調査';
+                        colorClass = 'bg-green-500';
+                        titleColor = 'text-green-800';
+                    } else if (type === 'comprehensive') {
+                        title = '学期総合';
+                        colorClass = 'bg-purple-500';
+                        titleColor = 'text-purple-800';
                     }
+
+                    reportSections.push({
+                        type,
+                        title,
+                        colorClass,
+                        titleColor,
+                        rawName,
+                        mainSubjects,
+                        subSubjects,
+                        history,
+                        stats
+                    });
                 });
 
-                Object.keys(stats).forEach(sub => {
-                    stats[sub].avg = (stats[sub].sum / stats[sub].count).toFixed(1);
-                });
-
-                return { studentId, rawName, history, stats };
+                return reportSections;
             };
 
-            const studentDetail = useMemo(() => {
+            const comprehensiveReportData = useMemo(() => {
                 if (!selectedStudentId) return null;
-                return getStudentStats(selectedStudentId);
-            }, [selectedStudentId, currentExams, records, currentSubjects]);
+                return getComprehensiveStudentReport(selectedStudentId);
+            }, [selectedStudentId, exams, records]);
+
+            const currentStudentName = comprehensiveReportData && comprehensiveReportData.length > 0 ? comprehensiveReportData[0].rawName : selectedStudentId;
 
             // --- Navigation Handler ---
             const handleNavigateStudent = (direction) => {
                 if (!selectedStudentId || tableData.length === 0) return;
-                
                 const currentIndex = tableData.findIndex(r => r.studentId === selectedStudentId);
                 if (currentIndex === -1) return;
 
@@ -863,65 +859,37 @@
                 }
             };
 
-            // キーボード操作での移動
             useEffect(() => {
                 const handleKeyDown = (e) => {
                     if (!selectedStudentId) return;
-                    if (e.key === 'ArrowRight') {
-                        handleNavigateStudent('next');
-                    } else if (e.key === 'ArrowLeft') {
-                        handleNavigateStudent('prev');
-                    }
+                    if (e.key === 'ArrowRight') handleNavigateStudent('next');
+                    else if (e.key === 'ArrowLeft') handleNavigateStudent('prev');
                 };
-
                 window.addEventListener('keydown', handleKeyDown);
                 return () => window.removeEventListener('keydown', handleKeyDown);
             }, [selectedStudentId, tableData]);
 
-            // スワイプ操作での移動
-            const handleTouchStart = (e) => {
-                touchStartX.current = e.targetTouches[0].clientX;
-            };
-
-            const handleTouchMove = (e) => {
-                touchEndX.current = e.targetTouches[0].clientX;
-            };
-
+            const handleTouchStart = (e) => { touchStartX.current = e.targetTouches[0].clientX; };
+            const handleTouchMove = (e) => { touchEndX.current = e.targetTouches[0].clientX; };
             const handleTouchEnd = () => {
                 if (!touchStartX.current || !touchEndX.current) return;
                 const distance = touchStartX.current - touchEndX.current;
-                const isLeftSwipe = distance > 50;
-                const isRightSwipe = distance < -50;
-                
-                if (isLeftSwipe) {
-                    handleNavigateStudent('next');
-                } else if (isRightSwipe) {
-                    handleNavigateStudent('prev');
-                }
-                
+                if (distance > 50) handleNavigateStudent('next');
+                else if (distance < -50) handleNavigateStudent('prev');
                 touchStartX.current = null;
                 touchEndX.current = null;
             };
 
-            // --- CSV Export Handler ---
+            // --- Export / Print Handlers ---
             const handleExportCurrentExamCSV = () => {
                 if (!selectedExamId) return;
                 const exam = exams.find(e => e.id === selectedExamId);
                 if (!exam) return;
+                if (tableData.length === 0) return alert('出力するデータがありません。');
 
-                if (tableData.length === 0) {
-                    alert('出力するデータがありません。');
-                    return;
-                }
-
-                // 表示順（ソートされている場合はその順序）に合わせてCSVを出力
                 const csvData = tableData.map(r => {
                     const row = {
-                        '学年': r.grade,
-                        '組': r.class,
-                        '出席番号': r.no,
-                        '氏名': r.rawName,
-                        '学園奨学生': r.scholarship || ''
+                        '学年': r.grade, '組': r.class, '出席番号': r.no, '氏名': r.rawName, '学園奨学生': r.scholarship || ''
                     };
                     currentSubjects.forEach(sub => {
                         row[sub] = r.scores[sub] !== undefined ? r.scores[sub] : '';
@@ -930,8 +898,6 @@
                 });
 
                 const csvContent = Papa.unparse(csvData);
-                
-                // BOMを追加して文字化けを防止
                 const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
                 const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' });
                 const url = URL.createObjectURL(blob);
@@ -943,23 +909,18 @@
                 document.body.removeChild(link);
             };
 
-            // --- Print PDF Handler ---
-            const handlePrintAll = () => {
-                if (tableData.length === 0) {
-                    alert('印刷するデータがありません。');
-                    return;
-                }
-                // 印刷準備状態にする
-                setIsPrintingAll(true);
-                // Reactの描画を待ってから印刷ダイアログを起動
+            const triggerPrint = (targetId) => {
+                setPrintTargetId(targetId);
+                setIsPrinting(true);
                 setTimeout(() => {
-                    alert("印刷プレビューが開きます。\n「送信先（プリンター）」を「PDFに保存」にして保存してください。");
+                    if(targetId === 'ALL') alert("印刷プレビューが開きます。\n「送信先（プリンター）」を「PDFに保存」にして保存してください。");
                     window.print();
-                    setIsPrintingAll(false);
-                }, 500);
+                    setIsPrinting(false);
+                    setPrintTargetId(null);
+                }, 800); // 描画を待つため少し長めに待機
             };
 
-            // --- Render Helpers ---
+            // --- STREAMING_CHUNK:UI Rendering Helpers... ---
             const renderDiffText = (diff, subjectName = '', extraClass = '') => {
                 if (diff === undefined || diff === null || isNaN(diff)) return null;
                 const isFloat = typeof subjectName === 'string' && (subjectName.includes('平均') || subjectName.includes('偏差値'));
@@ -968,12 +929,8 @@
                 const diffNum = Number(formattedDiff);
 
                 if (diffNum === 0) return <span className={`text-slate-400 ${extraClass}`}>(±0)</span>;
-
-                if (diffNum > 0) {
-                    return <span className={`font-medium ${isRank ? 'text-red-500' : 'text-green-600'} ${extraClass}`}>(+{formattedDiff})</span>;
-                } else {
-                    return <span className={`font-medium ${isRank ? 'text-green-600' : 'text-red-500'} ${extraClass}`}>({formattedDiff})</span>;
-                }
+                if (diffNum > 0) return <span className={`font-medium ${isRank ? 'text-red-500' : 'text-green-600'} ${extraClass}`}>(+{formattedDiff})</span>;
+                return <span className={`font-medium ${isRank ? 'text-green-600' : 'text-red-500'} ${extraClass}`}>({formattedDiff})</span>;
             };
 
             const renderSortIcon = (key) => {
@@ -992,18 +949,123 @@
                 }
             }
 
-            const renderTabType = (type) => {
-                if (type === 'benesse') return { label: '学力推移', bg: 'bg-green-500' };
-                if (type === 'comprehensive') return { label: '学期総合', bg: 'bg-purple-500' };
-                return { label: '定期試験', bg: 'bg-blue-500' };
-            };
+            // --- STREAMING_CHUNK:Reusable Report Section Component... ---
+            // 統合レポートの1セクションを描画するコンポーネント (画面・PDF兼用)
+            const ReportSection = ({ section, isPrint }) => {
+                if (!section) return null;
+                
+                // ヒートマップのテーブルを描画する関数
+                const renderTable = (subjects, titleSuffix) => {
+                    if (!subjects || subjects.length === 0) return null;
+                    return (
+                        <div className={`bg-white rounded-lg border border-slate-200 shadow-sm overflow-x-auto relative z-0 mb-4 avoid-break`}>
+                            {titleSuffix && <div className="text-xs font-bold text-slate-500 bg-slate-50 px-3 py-1.5 border-b border-slate-200">{titleSuffix}</div>}
+                            <table className="w-full text-[11px] text-center whitespace-nowrap border-separate border-spacing-0">
+                                <thead className="bg-slate-100 text-slate-600 uppercase">
+                                    <tr>
+                                        <th className="px-2 py-2 font-medium text-left sticky left-0 top-0 bg-slate-100 z-30 border-b border-slate-200 min-w-[120px] w-[120px]">試験名</th>
+                                        <th className="px-2 py-2 font-medium sticky top-0 bg-slate-100 z-20 border-b border-slate-200 min-w-[80px] w-[80px]">クラス/番号</th>
+                                        <th className="px-1 py-2 font-medium sticky top-0 bg-slate-100 z-20 border-b border-slate-200 min-w-[30px] w-[30px]">奨</th>
+                                        {subjects.map(sub => (
+                                            <th key={sub} className="px-2 py-2 font-medium sticky top-0 bg-slate-100 z-20 border-b border-slate-200 min-w-[72px] w-[72px]">{sub}</th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {section.history.map((h, i) => {
+                                        if (!h.record) {
+                                            return (
+                                                <tr key={h.examId} className="bg-slate-50/50">
+                                                    <td className="px-2 py-2 text-left font-medium text-slate-500 sticky left-0 bg-slate-50/90 z-20 min-w-[120px]">{h.examName}</td>
+                                                    <td colSpan={subjects.length + 2} className="px-2 py-2 text-slate-400 italic">データなし</td>
+                                                </tr>
+                                            );
+                                        }
+                                        
+                                        const prevRecord = i > 0 ? section.history[i-1].record : null;
+                                        return (
+                                            <tr key={h.examId} className="hover:bg-blue-50 transition-colors">
+                                                <td className="px-2 py-2 text-left font-bold text-slate-700 sticky left-0 bg-white z-20 shadow-[2px_0_5px_rgba(0,0,0,0.02)] border-b border-slate-50 min-w-[120px] truncate">
+                                                    {h.examName}
+                                                </td>
+                                                <td className={`px-2 py-2 font-mono text-[10px] sm:text-[11px] bg-white border-b border-slate-50 z-10 min-w-[80px] ${h.record.class === 'A' ? 'text-red-600 font-bold' : h.record.class === 'B' ? 'text-blue-600 font-bold' : 'text-slate-500'}`}>
+                                                    {h.record.grade}-{h.record.class}-{h.record.no.toString().padStart(2, '0')}
+                                                </td>
+                                                <td className="px-1 py-2 text-center text-[10px] font-bold bg-white border-b border-slate-50 border-r z-10 min-w-[30px]">
+                                                    {h.record.scholarship && <span className="text-amber-600">{h.record.scholarship.replace('学生', '')}</span>}
+                                                </td>
+                                                {subjects.map(sub => {
+                                                    const score = h.record.scores[sub];
+                                                    const prevScore = prevRecord ? prevRecord.scores[sub] : undefined;
+                                                    const diff = (score !== undefined && prevScore !== undefined) ? score - prevScore : undefined;
+                                                    
+                                                    return (
+                                                        <td key={sub} className="px-1 py-2 border-l border-slate-50 bg-white border-b z-10 min-w-[72px]">
+                                                            <div className="flex flex-col items-center justify-center">
+                                                                <span className={`inline-block w-10 text-center py-0.5 rounded font-medium text-[11px] ${getScoreColor(score, sub)}`}>
+                                                                    {formatScore(score, sub)}
+                                                                </span>
+                                                                <div className="h-3 mt-0.5 flex justify-center">
+                                                                    {diff !== undefined && renderDiffText(diff, sub, 'text-[8.5px]')}
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                    );
+                                                })}
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    );
+                };
 
-            const tabInfo = renderTabType(activeTab);
+                return (
+                    <div className="mb-8 relative pl-4 border-l-2 border-slate-200 avoid-break">
+                        <div className={`absolute -left-[11px] top-0 w-5 h-5 rounded-full ${section.colorClass} border-4 border-white flex items-center justify-center`}></div>
+                        
+                        <h3 className={`text-base sm:text-lg font-bold mb-3 ${section.titleColor} flex items-center gap-2 avoid-break`}>
+                            {section.title} <span className="text-xs font-normal text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">全{section.history.filter(h=>h.record).length}回</span>
+                        </h3>
+                        
+                        {/* Stats Grid */}
+                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 mb-4 avoid-break">
+                            {[...section.mainSubjects, ...section.subSubjects].map(sub => {
+                                const stat = section.stats[sub];
+                                if (!stat) return null;
+                                const isFloat = typeof sub === 'string' && (sub.includes('平均') || sub.includes('偏差値'));
+                                const displayAvg = isFloat ? Number(stat.avg).toFixed(1) : Math.round(stat.avg).toString();
+                                const displayMax = isFloat ? Number(stat.max).toFixed(1) : Math.round(stat.max).toString();
+                                const displayMin = isFloat ? Number(stat.min).toFixed(1) : Math.round(stat.min).toString();
+
+                                return (
+                                    <div key={sub} className={`p-2 rounded border border-slate-200 shadow-sm flex flex-col justify-between ${isPrint ? 'bg-white' : 'bg-white'}`}>
+                                        <div className="text-[10px] sm:text-[11px] font-bold text-slate-600 mb-1 border-b border-slate-100 pb-1 truncate" title={sub}>{sub}</div>
+                                        <div className="flex justify-between items-end mb-1">
+                                            <span className="text-[9px] text-slate-400">平均</span>
+                                            <span className={`text-sm sm:text-base font-bold leading-none ${section.titleColor}`}>{displayAvg}</span>
+                                        </div>
+                                        <div className="flex justify-between text-[8px] sm:text-[9px] mt-1 bg-slate-50 px-1 py-0.5 rounded">
+                                            <span className="text-red-600 font-medium">↑ {displayMax}</span>
+                                            <span className="text-blue-600 font-medium">↓ {displayMin}</span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* Trend Tables (Split into 2 if there are sub subjects) */}
+                        {renderTable(section.mainSubjects, section.subSubjects.length > 0 ? "主要教科" : "")}
+                        {renderTable(section.subSubjects, "実技・総合")}
+                    </div>
+                );
+            };
 
             return (
                 <div>
                     {/* --- MAIN UI (Hides during print) --- */}
-                    <div className={isPrintingAll ? 'no-print' : 'flex flex-col h-screen overflow-hidden'}>
+                    <div className={isPrinting ? 'no-print' : 'flex flex-col h-screen overflow-hidden'}>
                         {/* Header */}
                         <header className="bg-slate-900 text-white p-4 flex justify-between items-center shrink-0 relative z-40">
                             <div className="flex items-center gap-3">
@@ -1017,7 +1079,7 @@
                                 <div className="bg-blue-600 p-2 rounded-lg">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                                 </div>
-                                <h1 className="text-xl font-bold tracking-wider hidden sm:block">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-2">v2.12</span></h1>
+                                <h1 className="text-xl font-bold tracking-wider hidden sm:block">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-2">v3.0</span></h1>
                             </div>
                             <div className="flex items-center gap-4">
                                 <div className="bg-slate-800 p-1.5 rounded-md flex items-center gap-2 border border-slate-700">
@@ -1041,16 +1103,16 @@
                                                     📄 定期試験用 CSV
                                                 </button>
                                                 <button 
-                                                    onClick={() => { handleDownloadSampleCSV('benesse'); setIsDlMenuOpen(false); }}
+                                                    onClick={() => { handleDownloadSampleCSV('comprehensive'); setIsDlMenuOpen(false); }}
                                                     className="w-full text-left px-4 py-3 text-[13px] text-slate-700 hover:bg-blue-50 hover:text-blue-700 font-medium border-b border-slate-100"
                                                 >
-                                                    📄 学力推移調査用 CSV
+                                                    📄 学期総合用 CSV
                                                 </button>
                                                 <button 
-                                                    onClick={() => { handleDownloadSampleCSV('comprehensive'); setIsDlMenuOpen(false); }}
+                                                    onClick={() => { handleDownloadSampleCSV('benesse'); setIsDlMenuOpen(false); }}
                                                     className="w-full text-left px-4 py-3 text-[13px] text-slate-700 hover:bg-blue-50 hover:text-blue-700 font-medium"
                                                 >
-                                                    📄 学期総合用 CSV
+                                                    📄 学力推移調査用 CSV
                                                 </button>
                                             </div>
                                         )}
@@ -1058,7 +1120,7 @@
                                     <div className="w-px h-6 bg-slate-700 hidden sm:block"></div>
                                     <input 
                                         type="text" 
-                                        placeholder="試験名 (例: 1年1学期総合)" 
+                                        placeholder="試験名 (例: 2年1学期中間)" 
                                         className="bg-transparent text-[13px] px-2 py-1 outline-none text-white placeholder-slate-400 w-32 md:w-48"
                                         value={importExamName}
                                         onChange={(e) => setImportExamName(e.target.value)}
@@ -1083,27 +1145,27 @@
                             </div>
                         </header>
 
-                        {/* Main Content Area */}
+                        {/* --- STREAMING_CHUNK:Main Layout Structure... --- */}
                         <div className="flex flex-1 overflow-hidden relative">
                             
-                            {/* Sidebar: Exam List & Tabs */}
-                            <div className={`transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-64 border-r opacity-100' : 'w-0 border-r-0 opacity-0'} bg-white border-slate-200 flex flex-col shrink-0 z-10 overflow-hidden`}>
-                                <div className="w-64 flex flex-col h-full">
+                            {/* Sidebar */}
+                            <div className={`transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-56 border-r opacity-100' : 'w-0 border-r-0 opacity-0'} bg-white border-slate-200 flex flex-col shrink-0 z-10 overflow-hidden`}>
+                                <div className="w-56 flex flex-col h-full">
                                     <div className="flex border-b border-slate-200 bg-slate-50 flex-wrap">
                                         <button 
-                                            className={`flex-1 py-2 px-1 text-[12px] font-bold transition-colors whitespace-nowrap ${activeTab === 'regular' ? 'text-blue-600 border-b-2 border-blue-600 bg-white' : 'text-slate-500 hover:bg-slate-100'}`}
+                                            className={`flex-1 py-2 px-1 text-[11px] font-bold transition-colors ${activeTab === 'regular' ? 'text-blue-600 border-b-2 border-blue-600 bg-white' : 'text-slate-500 hover:bg-slate-100'}`}
                                             onClick={() => setActiveTab('regular')}
                                         >
                                             定期試験
                                         </button>
                                         <button 
-                                            className={`flex-1 py-2 px-1 text-[12px] font-bold transition-colors whitespace-nowrap ${activeTab === 'benesse' ? 'text-blue-600 border-b-2 border-blue-600 bg-white' : 'text-slate-500 hover:bg-slate-100'}`}
+                                            className={`flex-1 py-2 px-1 text-[11px] font-bold transition-colors ${activeTab === 'benesse' ? 'text-blue-600 border-b-2 border-blue-600 bg-white' : 'text-slate-500 hover:bg-slate-100'}`}
                                             onClick={() => setActiveTab('benesse')}
                                         >
                                             学力推移
                                         </button>
                                         <button 
-                                            className={`flex-1 py-2 px-1 text-[12px] font-bold transition-colors whitespace-nowrap ${activeTab === 'comprehensive' ? 'text-blue-600 border-b-2 border-blue-600 bg-white' : 'text-slate-500 hover:bg-slate-100'}`}
+                                            className={`flex-1 py-2 px-1 text-[11px] font-bold transition-colors ${activeTab === 'comprehensive' ? 'text-blue-600 border-b-2 border-blue-600 bg-white' : 'text-slate-500 hover:bg-slate-100'}`}
                                             onClick={() => setActiveTab('comprehensive')}
                                         >
                                             学期総合
@@ -1140,8 +1202,8 @@
                                         <div className="p-4 bg-white border-b border-slate-200 flex justify-between items-end shrink-0">
                                             <div>
                                                 <div className="flex items-center gap-2">
-                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded text-white ${tabInfo.bg}`}>
-                                                        {tabInfo.label}
+                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded text-white ${activeTab === 'regular' ? 'bg-blue-500' : (activeTab === 'benesse' ? 'bg-green-500' : 'bg-purple-500')}`}>
+                                                        {activeTab === 'regular' ? '定期試験' : (activeTab === 'benesse' ? '学力推移' : '学期総合')}
                                                     </span>
                                                     <h2 className="text-xl font-bold text-slate-800">{selectedExamName}</h2>
                                                 </div>
@@ -1163,7 +1225,7 @@
                                                     <IconDownload /> 表示順でCSV保存
                                                 </button>
                                                 <button 
-                                                    onClick={handlePrintAll}
+                                                    onClick={() => triggerPrint('ALL')}
                                                     className="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold py-1.5 px-2 rounded border border-emerald-200 flex items-center gap-1 shadow-sm transition-colors"
                                                 >
                                                     <IconPrinter /> 全員の個人表をPDF/印刷
@@ -1403,281 +1465,106 @@
                             </div>
                         </div>
 
-                        {/* Student Detail Modal (Normal Screen UI) */}
-                    {selectedStudentId && studentDetail && (
-                        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4" onClick={() => setSelectedStudentId(null)}>
-                            <div 
-                                className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden" 
-                                onClick={e => e.stopPropagation()}
-                                onTouchStart={handleTouchStart}
-                                onTouchMove={handleTouchMove}
-                                onTouchEnd={handleTouchEnd}
-                            >
-                                {/* Modal Header */}
-                                <div className="bg-slate-800 text-white px-4 py-3 sm:px-6 sm:py-4 flex justify-between items-center shrink-0">
-                                    <div className="flex items-center gap-1 sm:gap-2">
-                                        <button 
-                                            onClick={() => handleNavigateStudent('prev')} 
-                                            className={`p-1 sm:p-2 rounded-full transition-colors shrink-0 ${tableData.findIndex(r => r.studentId === selectedStudentId) > 0 ? 'text-slate-300 hover:text-white hover:bg-slate-700/50' : 'text-slate-600 cursor-not-allowed'}`}
-                                            disabled={tableData.findIndex(r => r.studentId === selectedStudentId) <= 0}
-                                            title="前の生徒 (←)"
-                                        >
-                                            <IconChevronLeft />
-                                        </button>
+                        {/* --- STREAMING_CHUNK:Student Detail Modal... --- */}
+                        {selectedStudentId && comprehensiveReportData && (
+                            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4" onClick={() => setSelectedStudentId(null)}>
+                                <div 
+                                    className="bg-white rounded-xl shadow-2xl w-full max-w-5xl h-[95vh] flex flex-col overflow-hidden" 
+                                    onClick={e => e.stopPropagation()}
+                                    onTouchStart={handleTouchStart}
+                                    onTouchMove={handleTouchMove}
+                                    onTouchEnd={handleTouchEnd}
+                                >
+                                    {/* Modal Header */}
+                                    <div className="bg-slate-800 text-white px-4 py-3 sm:px-6 sm:py-4 flex justify-between items-center shrink-0">
+                                        <div className="flex items-center gap-1 sm:gap-2">
+                                            <button 
+                                                onClick={() => handleNavigateStudent('prev')} 
+                                                className={`p-1 sm:p-2 rounded-full transition-colors shrink-0 ${tableData.findIndex(r => r.studentId === selectedStudentId) > 0 ? 'text-slate-300 hover:text-white hover:bg-slate-700/50' : 'text-slate-600 cursor-not-allowed'}`}
+                                                disabled={tableData.findIndex(r => r.studentId === selectedStudentId) <= 0}
+                                                title="前の生徒 (←)"
+                                            >
+                                                <IconChevronLeft />
+                                            </button>
 
-                                        <div className="flex items-center gap-3 sm:gap-4 mx-1 sm:mx-2 w-48 sm:w-72">
-                                            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-500 rounded-full flex items-center justify-center text-lg sm:text-xl font-bold shadow-inner shrink-0">
-                                                {studentDetail.rawName.charAt(0)}
-                                            </div>
-                                            <div className="overflow-hidden">
-                                                <div className="flex items-center gap-2 mb-0.5 sm:mb-1">
-                                                    <span className={`text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded text-white shrink-0 ${tabInfo.bg}`}>
-                                                        {tabInfo.label}
-                                                    </span>
-                                                    <span className="text-[10px] text-slate-400 font-mono shrink-0">
-                                                        {tableData.findIndex(r => r.studentId === selectedStudentId) + 1} / {tableData.length}
-                                                    </span>
+                                            <div className="flex items-center gap-3 sm:gap-4 mx-1 sm:mx-2 w-56 sm:w-80">
+                                                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-500 rounded-full flex items-center justify-center text-lg sm:text-xl font-bold shadow-inner shrink-0">
+                                                    {currentStudentName.charAt(0)}
                                                 </div>
-                                                <h2 className="text-xl sm:text-2xl font-bold leading-none truncate">{studentDetail.rawName}</h2>
+                                                <div className="overflow-hidden">
+                                                    <div className="flex items-center gap-2 mb-0.5 sm:mb-1">
+                                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded text-white bg-slate-600 shrink-0">
+                                                            個人統合レポート
+                                                        </span>
+                                                        <span className="text-[10px] text-slate-400 font-mono shrink-0">
+                                                            {tableData.findIndex(r => r.studentId === selectedStudentId) + 1} / {tableData.length}
+                                                        </span>
+                                                    </div>
+                                                    <h2 className="text-xl sm:text-2xl font-bold leading-none truncate">{currentStudentName}</h2>
+                                                </div>
                                             </div>
-                                        </div>
 
-                                        <button 
-                                            onClick={() => handleNavigateStudent('next')} 
-                                            className={`p-1 sm:p-2 rounded-full transition-colors shrink-0 ${tableData.findIndex(r => r.studentId === selectedStudentId) < tableData.length - 1 ? 'text-slate-300 hover:text-white hover:bg-slate-700/50' : 'text-slate-600 cursor-not-allowed'}`}
-                                            disabled={tableData.findIndex(r => r.studentId === selectedStudentId) >= tableData.length - 1}
-                                            title="次の生徒 (→)"
-                                        >
-                                            <IconChevronRight />
-                                        </button>
+                                            <button 
+                                                onClick={() => handleNavigateStudent('next')} 
+                                                className={`p-1 sm:p-2 rounded-full transition-colors shrink-0 ${tableData.findIndex(r => r.studentId === selectedStudentId) < tableData.length - 1 ? 'text-slate-300 hover:text-white hover:bg-slate-700/50' : 'text-slate-600 cursor-not-allowed'}`}
+                                                disabled={tableData.findIndex(r => r.studentId === selectedStudentId) >= tableData.length - 1}
+                                                title="次の生徒 (→)"
+                                            >
+                                                <IconChevronRight />
+                                            </button>
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                            <button 
+                                                onClick={() => triggerPrint(selectedStudentId)}
+                                                className="hidden sm:flex text-xs bg-slate-700 hover:bg-slate-600 text-white font-bold py-1.5 px-3 rounded border border-slate-600 items-center gap-1 shadow-sm transition-colors"
+                                            >
+                                                <IconPrinter /> この生徒をPDF出力
+                                            </button>
+                                            <button onClick={() => setSelectedStudentId(null)} className="text-slate-400 hover:text-white transition-colors bg-slate-700/50 p-1.5 sm:p-2 rounded-full shrink-0">
+                                                <IconX />
+                                            </button>
+                                        </div>
                                     </div>
-                                    <button onClick={() => setSelectedStudentId(null)} className="text-slate-400 hover:text-white transition-colors bg-slate-700/50 p-1.5 sm:p-2 rounded-full ml-auto shrink-0">
-                                        <IconX />
-                                    </button>
-                                </div>
 
-                                {/* Modal Body */}
+                                    {/* Modal Body (Comprehensive Report) */}
                                     <div className="p-4 sm:p-6 overflow-y-auto bg-slate-50 flex-1">
-                                        
-                                        {/* Stats Cards */}
-                                        <div className="mb-4">
-                                            <h3 className="text-sm sm:text-base font-bold text-slate-800 mb-2 sm:mb-3 border-l-4 border-blue-500 pl-2">各項目 統計サマリー (全{studentDetail.history.filter(h=>h.record).length}回)</h3>
-                                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 sm:gap-3">
-                                                {currentSubjects.map(sub => {
-                                                    const stat = studentDetail.stats[sub];
-                                                    if (!stat) return null;
-                                                    const isFloat = typeof sub === 'string' && (sub.includes('平均') || sub.includes('偏差値'));
-                                                    const displayAvg = isFloat ? Number(stat.avg).toFixed(1) : Math.round(stat.avg).toString();
-                                                    const displayMax = isFloat ? Number(stat.max).toFixed(1) : Math.round(stat.max).toString();
-                                                    const displayMin = isFloat ? Number(stat.min).toFixed(1) : Math.round(stat.min).toString();
-
-                                                    return (
-                                                        <div key={sub} className="bg-white p-2 rounded-lg border border-slate-200 shadow-sm flex flex-col justify-between">
-                                                            <div className="text-[10px] sm:text-xs font-bold text-slate-600 mb-1 border-b pb-1 truncate" title={sub}>{sub}</div>
-                                                            <div className="flex justify-between items-end mb-1">
-                                                                <span className="text-[9px] sm:text-[10px] text-slate-400">平均</span>
-                                                                <span className="text-sm sm:text-base font-bold text-blue-600 leading-none">{displayAvg}</span>
-                                                            </div>
-                                                            <div className="flex justify-between text-[9px] sm:text-[10px] mt-1 bg-slate-50 px-1 py-0.5 rounded">
-                                                                <span className="text-red-600 font-medium" title={sub.includes('席次') || sub.includes('順位') ? 'ワースト' : '最高値'}>↑ {displayMax}</span>
-                                                                <span className="text-blue-600 font-medium" title={sub.includes('席次') || sub.includes('順位') ? 'ベスト' : '最低値'}>↓ {displayMin}</span>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-
-                                        {/* Trend Table (Heatmap style) */}
-                                        <div>
-                                            <h3 className="text-sm sm:text-base font-bold text-slate-800 mb-2 sm:mb-3 border-l-4 border-blue-500 pl-2">推移ヒートマップ</h3>
-                                            <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-x-auto relative z-0 pb-2">
-                                                <table className="w-full text-[11px] text-center whitespace-nowrap border-separate border-spacing-0">
-                                                    <thead className="bg-slate-100 text-slate-600 uppercase">
-                                                        <tr>
-                                                            <th className="px-2 py-2 font-medium text-left sticky left-0 top-0 bg-slate-100 z-30 border-b border-slate-200 min-w-[120px] w-[120px]">試験名</th>
-                                                            <th className="px-2 py-2 font-medium sticky top-0 bg-slate-100 z-20 border-b border-slate-200 min-w-[80px] w-[80px]">クラス/番号</th>
-                                                            <th className="px-1 py-2 font-medium sticky top-0 bg-slate-100 z-20 border-b border-slate-200 min-w-[40px] w-[40px]">奨</th>
-                                                            {currentSubjects.map(sub => (
-                                                                <th key={sub} className="px-2 py-2 font-medium sticky top-0 bg-slate-100 z-20 border-b border-slate-200 min-w-[84px] w-[84px]">{sub}</th>
-                                                            ))}
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody className="divide-y divide-slate-100">
-                                                        {studentDetail.history.map((h, i) => {
-                                                            if (!h.record) {
-                                                                return (
-                                                                    <tr key={h.examId} className="bg-slate-50/50">
-                                                                        <td className="px-2 py-2 text-left font-medium text-slate-500 sticky left-0 bg-slate-50/90 z-20 min-w-[120px]">{h.examName}</td>
-                                                                        <td colSpan={currentSubjects.length + 2} className="px-2 py-2 text-slate-400 italic">データなし</td>
-                                                                    </tr>
-                                                                );
-                                                            }
-                                                            
-                                                            // 前回との差分を計算
-                                                            const prevRecord = i > 0 ? studentDetail.history[i-1].record : null;
-
-                                                            return (
-                                                                <tr key={h.examId} className="hover:bg-blue-50 transition-colors">
-                                                                    <td className="px-2 py-2 text-left font-bold text-slate-700 sticky left-0 bg-white z-20 shadow-[2px_0_5px_rgba(0,0,0,0.02)] border-b border-slate-50 min-w-[120px] truncate">
-                                                                        {h.examName}
-                                                                    </td>
-                                                                    <td className={`px-2 py-2 font-mono text-[10px] sm:text-[11px] bg-white border-b border-slate-50 z-10 min-w-[80px] ${h.record.class === 'A' ? 'text-red-600 font-bold' : h.record.class === 'B' ? 'text-blue-600 font-bold' : 'text-slate-500'}`}>
-                                                                        {h.record.grade}-{h.record.class}-{h.record.no.toString().padStart(2, '0')}
-                                                                    </td>
-                                                                    <td className="px-1 py-2 text-center text-[10px] font-bold bg-white border-b border-slate-50 border-r z-10 min-w-[40px]">
-                                                                        {h.record.scholarship && <span className="text-amber-600">{h.record.scholarship.replace('学生', '')}</span>}
-                                                                    </td>
-                                                                    {currentSubjects.map(sub => {
-                                                                        const score = h.record.scores[sub];
-                                                                        const prevScore = prevRecord ? prevRecord.scores[sub] : undefined;
-                                                                        const diff = (score !== undefined && prevScore !== undefined) ? score - prevScore : undefined;
-                                                                        
-                                                                        return (
-                                                                            <td key={sub} className="px-1 py-2 border-l border-slate-50 bg-white border-b z-10 min-w-[84px]">
-                                                                                <div className="flex flex-col items-center justify-center">
-                                                                                    <span className={`inline-block w-10 text-center py-0.5 rounded font-medium ${getScoreColor(score, sub)}`}>
-                                                                                        {formatScore(score, sub)}
-                                                                                    </span>
-                                                                                    <div className="h-3 mt-0.5 flex justify-center">
-                                                                                        {diff !== undefined && renderDiffText(diff, sub, 'text-[9px]')}
-                                                                                    </div>
-                                                                                </div>
-                                                                            </td>
-                                                                        );
-                                                                    })}
-                                                                </tr>
-                                                            );
-                                                        })}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-                                        
+                                        {comprehensiveReportData.length === 0 ? (
+                                            <div className="text-center text-slate-500 py-10">データがありません</div>
+                                        ) : (
+                                            comprehensiveReportData.map(section => (
+                                                <ReportSection key={section.type} section={section} isPrint={false} />
+                                            ))
+                                        )}
                                     </div>
                                 </div>
                             </div>
                         )}
                     </div>
 
-                    {/* --- PRINT ONLY TEMPLATE (Hides during normal viewing) --- */}
+                    {/* --- STREAMING_CHUNK:Print Only Template... --- */}
                     <div className="print-only">
-                        {isPrintingAll && tableData.map((row, index) => {
-                            const detail = getStudentStats(row.studentId);
-                            if (!detail) return null;
+                        {isPrinting && (printTargetId === 'ALL' ? tableData.map(row => row.studentId) : [printTargetId]).map((targetStudentId) => {
+                            const detailData = getComprehensiveStudentReport(targetStudentId);
+                            if (!detailData || detailData.length === 0) return null;
+                            const studentName = detailData[0].rawName;
                             
                             return (
-                                <div key={row.studentId} className="page-break" style={{ padding: '0 10px', width: '100%', boxSizing: 'border-box' }}>
+                                <div key={targetStudentId} className="page-break" style={{ padding: '0 10px', width: '100%', boxSizing: 'border-box' }}>
                                     {/* Header */}
-                                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px', borderBottom: '2px solid #1e293b', paddingBottom: '8px' }}>
-                                        <div style={{ width: '36px', height: '36px', backgroundColor: '#3b82f6', borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '18px', marginRight: '12px', WebkitPrintColorAdjust: 'exact' }}>
-                                            {detail.rawName.charAt(0)}
+                                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '24px', borderBottom: '2px solid #1e293b', paddingBottom: '12px' }}>
+                                        <div style={{ width: '40px', height: '40px', backgroundColor: '#3b82f6', borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '20px', marginRight: '16px', WebkitPrintColorAdjust: 'exact' }}>
+                                            {studentName.charAt(0)}
                                         </div>
-                                        <h2 style={{ fontSize: '24px', fontWeight: 'bold', margin: 0, color: '#0f172a' }}>
-                                            {detail.rawName}
-                                            <span style={{ fontSize: '12px', fontWeight: 'normal', color: '#64748b', marginLeft: '12px' }}>成績推移レポート</span>
+                                        <h2 style={{ fontSize: '28px', fontWeight: 'bold', margin: 0, color: '#0f172a' }}>
+                                            {studentName}
+                                            <span style={{ fontSize: '14px', fontWeight: 'normal', color: '#64748b', marginLeft: '16px' }}>個人成績 統合レポート</span>
                                         </h2>
-                                        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            <span style={{ fontSize: '10px', fontWeight: 'bold', padding: '4px 8px', borderRadius: '4px', color: 'white', backgroundColor: activeTab === 'regular' ? '#3b82f6' : (activeTab === 'comprehensive' ? '#a855f7' : '#22c55e'), WebkitPrintColorAdjust: 'exact' }}>
-                                                {tabInfo.label}
-                                            </span>
-                                        </div>
                                     </div>
 
-                                    {/* Stats Grid */}
-                                    <div style={{ marginBottom: '20px' }}>
-                                        <h3 style={{ fontSize: '12px', fontWeight: 'bold', color: '#1e293b', marginBottom: '10px', borderLeft: '3px solid #3b82f6', paddingLeft: '6px' }}>各項目 統計サマリー</h3>
-                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px' }}>
-                                            {currentSubjects.map(sub => {
-                                                const stat = detail.stats[sub];
-                                                if (!stat) return null;
-                                                const isFloat = typeof sub === 'string' && (sub.includes('平均') || sub.includes('偏差値'));
-                                                const displayAvg = isFloat ? Number(stat.avg).toFixed(1) : Math.round(stat.avg).toString();
-                                                const displayMax = isFloat ? Number(stat.max).toFixed(1) : Math.round(stat.max).toString();
-                                                const displayMin = isFloat ? Number(stat.min).toFixed(1) : Math.round(stat.min).toString();
-
-                                                return (
-                                                    <div key={sub} style={{ padding: '6px', border: '1px solid #e2e8f0', borderRadius: '6px', backgroundColor: '#f8fafc', WebkitPrintColorAdjust: 'exact' }}>
-                                                        <div style={{ fontSize: '9px', fontWeight: 'bold', color: '#475569', marginBottom: '4px', borderBottom: '1px solid #cbd5e1', paddingBottom: '2px', whiteSpace: 'nowrap', overflow: 'hidden' }}>{sub}</div>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '2px' }}>
-                                                            <span style={{ fontSize: '8px', color: '#94a3b8' }}>平均</span>
-                                                            <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#2563eb' }}>{displayAvg}</span>
-                                                        </div>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px', backgroundColor: '#ffffff', padding: '2px', borderRadius: '2px', border: '1px solid #f1f5f9', WebkitPrintColorAdjust: 'exact' }}>
-                                                            <span style={{ color: '#dc2626', fontWeight: 'bold' }}>↑ {displayMax}</span>
-                                                            <span style={{ color: '#2563eb', fontWeight: 'bold' }}>↓ {displayMin}</span>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-
-                                    {/* Table */}
-                                    <div>
-                                        <h3 style={{ fontSize: '12px', fontWeight: 'bold', color: '#1e293b', marginBottom: '10px', borderLeft: '3px solid #3b82f6', paddingLeft: '6px' }}>推移ヒートマップ</h3>
-                                        <table style={{ width: '100%', fontSize: '9px', textAlign: 'center', borderCollapse: 'collapse', border: '1px solid #cbd5e1' }}>
-                                            <thead>
-                                                <tr>
-                                                    <th style={{ border: '1px solid #cbd5e1', backgroundColor: '#f1f5f9', padding: '6px 4px', color: '#475569', WebkitPrintColorAdjust: 'exact' }}>試験名</th>
-                                                    <th style={{ border: '1px solid #cbd5e1', backgroundColor: '#f1f5f9', padding: '6px 4px', color: '#475569', WebkitPrintColorAdjust: 'exact' }}>クラス/番</th>
-                                                    <th style={{ border: '1px solid #cbd5e1', backgroundColor: '#f1f5f9', padding: '6px 4px', color: '#475569', WebkitPrintColorAdjust: 'exact' }}>奨</th>
-                                                    {currentSubjects.map(sub => (
-                                                        <th key={sub} style={{ border: '1px solid #cbd5e1', backgroundColor: '#f1f5f9', padding: '6px 2px', color: '#475569', WebkitPrintColorAdjust: 'exact' }}>{sub}</th>
-                                                    ))}
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {detail.history.map((h, i) => {
-                                                    if (!h.record) {
-                                                        return (
-                                                            <tr key={h.examId}>
-                                                                <td style={{ border: '1px solid #cbd5e1', padding: '6px 4px', textAlign: 'left', color: '#64748b' }}>{h.examName}</td>
-                                                                <td colSpan={currentSubjects.length + 2} style={{ border: '1px solid #cbd5e1', padding: '6px 4px', color: '#94a3b8', fontStyle: 'italic' }}>データなし</td>
-                                                            </tr>
-                                                        );
-                                                    }
-                                                    const prevRecord = i > 0 ? detail.history[i-1].record : null;
-                                                    return (
-                                                        <tr key={h.examId}>
-                                                            <td style={{ border: '1px solid #cbd5e1', padding: '6px 4px', textAlign: 'left', fontWeight: 'bold', color: '#334155' }}>{h.examName}</td>
-                                                            <td style={{ border: '1px solid #cbd5e1', padding: '6px 4px', color: h.record.class === 'A' ? '#dc2626' : (h.record.class === 'B' ? '#2563eb' : '#64748b') }}>
-                                                                {h.record.grade}-{h.record.class}-{h.record.no.toString().padStart(2, '0')}
-                                                            </td>
-                                                            <td style={{ border: '1px solid #cbd5e1', padding: '6px 4px', fontWeight: 'bold', color: '#d97706' }}>
-                                                                {h.record.scholarship ? h.record.scholarship.replace('学生', '') : ''}
-                                                            </td>
-                                                            {currentSubjects.map(sub => {
-                                                                const score = h.record.scores[sub];
-                                                                const prevScore = prevRecord ? prevRecord.scores[sub] : undefined;
-                                                                const diff = (score !== undefined && prevScore !== undefined) ? score - prevScore : undefined;
-                                                                
-                                                                let diffElement = null;
-                                                                if (diff !== undefined && diff !== null && !isNaN(diff)) {
-                                                                    const isFloat = typeof sub === 'string' && (sub.includes('平均') || sub.includes('偏差値'));
-                                                                    const isRank = typeof sub === 'string' && (sub.includes('席次') || sub.includes('順位'));
-                                                                    let formattedDiff = isFloat ? Number(diff).toFixed(1) : Math.round(diff).toString();
-                                                                    const diffNum = Number(formattedDiff);
-                                                                    if (diffNum === 0) diffElement = <span style={{ color: '#94a3b8' }}>(±0)</span>;
-                                                                    else if (diffNum > 0) diffElement = <span style={{ color: isRank ? '#ef4444' : '#16a34a' }}>(+{formattedDiff})</span>;
-                                                                    else diffElement = <span style={{ color: isRank ? '#16a34a' : '#ef4444' }}>({formattedDiff})</span>;
-                                                                }
-
-                                                                return (
-                                                                    <td key={sub} style={{ border: '1px solid #cbd5e1', padding: '4px 2px' }}>
-                                                                        <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '10px' }}>
-                                                                            {formatScore(score, sub)}
-                                                                        </div>
-                                                                        <div style={{ height: '10px', fontSize: '7px', marginTop: '2px' }}>{diffElement}</div>
-                                                                    </td>
-                                                                );
-                                                            })}
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
+                                    {/* Sections */}
+                                    {detailData.map(section => (
+                                        <ReportSection key={section.type} section={section} isPrint={true} />
+                                    ))}
                                 </div>
                             );
                         })}
