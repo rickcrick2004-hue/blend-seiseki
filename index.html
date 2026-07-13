@@ -2,20 +2,13 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <script type="importmap">
-  {
-    "imports": {
-      "react": "https://esm.sh/react@18",
-      "react-dom/client": "https://esm.sh/react-dom@18/client",
-      "react/jsx-runtime": "https://esm.sh/react@18/jsx-runtime"
-    }
-  }
-</script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BLEND 成績推移トラッカー v2.7</title>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <title>BLEND 成績推移トラッカー v2.11</title>
+    <!-- React & Babelのバージョンを安定版に固定 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
@@ -63,7 +56,8 @@
 <body class="bg-slate-50 text-slate-800 font-sans min-h-screen">
     <div id="root"></div>
 
-    <script type="text/babel" data-type="module">
+    <!-- data-presets="react" を指定してBabelの予期せぬモジュール読み込みを防ぐ -->
+    <script type="text/babel" data-presets="react">
         const { useState, useEffect, useMemo, useRef } = React;
 
         // --- ユーティリティ関数 ---
@@ -93,7 +87,11 @@
             '国語点数', '国語偏差値', '国語学年順位',
             '数学点数', '数学偏差値', '数学学年順位',
             '英語点数', '英語偏差値', '英語学年順位',
-            '3教科点数', '3教科偏差値', '3教科学年順位'
+            '3教科点数', '3教科偏差値', '3教科学年順位',
+            // 学期総合 (評点など) - 定期試験と同じ科目が使われることが多いが念のため独立して定義可能に
+            '国語評点', '社会評点', '数学評点', '理科評点', '英語評点',
+            '音楽評点', '美術評点', '保体評点', '技家評点',
+            '9教科評点合計', '9教科評点平均'
         ];
 
         // 過去のデータから「全国」という文字を取り除くためのマイグレーション関数
@@ -134,7 +132,7 @@
             // State
             const [exams, setExams] = useState([]); // [{ id, name, type, order }]
             const [records, setRecords] = useState([]); // [{ examId, studentId, rawName, grade, class, no, scholarship, scores: {} }]
-            const [activeTab, setActiveTab] = useState('regular'); // 'regular' or 'benesse'
+            const [activeTab, setActiveTab] = useState('regular'); // 'regular' or 'benesse' or 'comprehensive'
             const [selectedExamId, setSelectedExamId] = useState(null);
             const [selectedStudentId, setSelectedStudentId] = useState(null);
             const [sortConfig, setSortConfig] = useState({ key: 'class_no', direction: 'asc' });
@@ -202,7 +200,7 @@
             // Save settings to localStorage when changed
             useEffect(() => {
                 localStorage.setItem('blend_firebase_config', firebaseConfig);
-                localStorage.setItem('blend_firebase_enabled', isFirebaseEnabled);
+                localStorage.setItem('blend_firebase_enabled', isFirebaseEnabled ? 'true' : 'false');
                 localStorage.setItem('blend_sync_id', syncId);
             }, [firebaseConfig, isFirebaseEnabled, syncId]);
 
@@ -214,7 +212,15 @@
             // Set initial selected exam when tab changes or exam list updates
             useEffect(() => {
                 if (currentExams.length > 0) {
-                    if (!selectedExamId || !currentExams.some(e => e.id === selectedExamId)) {
+                    // find() は未定義を返す可能性があるので undefined チェックを行う
+                    let found = false;
+                    for (let i = 0; i < currentExams.length; i++) {
+                        if (currentExams[i].id === selectedExamId) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!selectedExamId || !found) {
                         setSelectedExamId(currentExams[currentExams.length - 1].id);
                     }
                 } else {
@@ -227,8 +233,10 @@
                 const file = e.target.files[0];
                 if (!file) return;
                 if (!importExamName.trim()) {
-                    alert('試験名を入力してください（例：1年1学期中間、第1回学力推移調査）');
-                    fileInputRef.current.value = '';
+                    alert('試験名を入力してください（例：1年1学期中間、第1回学力推移、1年1学期総合）');
+                    if (fileInputRef && fileInputRef.current) {
+                        fileInputRef.current.value = '';
+                    }
                     return;
                 }
 
@@ -238,7 +246,9 @@
                     complete: (results) => {
                         const data = results.data;
                         processCSVData(data, importExamName);
-                        fileInputRef.current.value = '';
+                        if (fileInputRef && fileInputRef.current) {
+                            fileInputRef.current.value = '';
+                        }
                         setImportExamName('');
                     }
                 });
@@ -282,6 +292,14 @@
                         "1,B,3,今古賀 采歩,,72,60.1,8,55,48.2,35,68,56.7,11,195,55.0,15\n" +
                         "1,B,4,大野 颯佑,奨B,82,65.3,3,78,63.1,5,80,64.2,4,240,64.2,3";
                     filename = "format_benesse.csv";
+                } else if (type === 'comprehensive') {
+                    csvContent = "学年,組,出席番号,氏名,学園奨学生,国語評点,社会評点,数学評点,理科評点,英語評点,音楽評点,美術評点,保体評点,技家評点,9教科評点合計,9教科評点平均\n" +
+                        "1,A,1,荒巻 拓海,,3,4,3,4,4,4,5,4,3,34,3.7\n" +
+                        "1,A,2,伊藤 大翔,奨A,4,3,5,4,4,4,4,5,4,37,4.1\n" +
+                        "1,B,3,今古賀 采歩,,3,3,3,3,3,5,4,5,4,33,3.6\n" +
+                        "1,B,4,大野 颯佑,奨B,5,5,5,5,4,5,5,5,5,44,4.8\n" +
+                        "1,A,5,海谷 瑛介,奨C,4,5,4,5,4,4,4,4,4,38,4.2";
+                    filename = "format_comprehensive.csv";
                 }
                 
                 const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
@@ -297,8 +315,13 @@
 
             const processCSVData = (data, examName) => {
                 let examType = 'regular';
-                if (data.length > 0 && Object.keys(data[0]).some(k => k.includes('偏差値') || k.includes('模試') || k.includes('推移調査'))) {
-                    examType = 'benesse';
+                if (data.length > 0) {
+                    const keys = Object.keys(data[0]);
+                    if (keys.some(k => k.includes('偏差値') || k.includes('模試') || k.includes('推移調査'))) {
+                        examType = 'benesse';
+                    } else if (keys.some(k => k.includes('評点') || k.includes('学期総合'))) {
+                        examType = 'comprehensive';
+                    }
                 }
 
                 const newExamId = generateId();
@@ -335,8 +358,8 @@
                         }
                         
                         const val = row[key];
-                        // 全国という文字があれば削除
-                        const subjectName = key.replace('評点', '').replace('全国', '').trim();
+                        // 評点はそのまま残すか、「全国」という文字があれば削除
+                        const subjectName = key.replace('全国', '').trim();
                         const scoreNum = Number(val);
                         
                         if (!isNaN(scoreNum) && val.trim() !== '') {
@@ -363,12 +386,23 @@
             };
 
             const processUpdateCSVData = (data, examIdToUpdate) => {
-                const examToUpdate = exams.find(e => e.id === examIdToUpdate);
+                let examToUpdate = null;
+                for(let i=0; i<exams.length; i++){
+                    if(exams[i].id === examIdToUpdate){
+                        examToUpdate = exams[i];
+                        break;
+                    }
+                }
                 if (!examToUpdate) return;
 
                 let examType = examToUpdate.type || 'regular';
-                if (data.length > 0 && Object.keys(data[0]).some(k => k.includes('偏差値') || k.includes('模試') || k.includes('推移調査'))) {
-                    examType = 'benesse';
+                if (data.length > 0) {
+                    const keys = Object.keys(data[0]);
+                    if (keys.some(k => k.includes('偏差値') || k.includes('模試') || k.includes('推移調査'))) {
+                        examType = 'benesse';
+                    } else if (keys.some(k => k.includes('評点') || k.includes('学期総合'))) {
+                        examType = 'comprehensive';
+                    }
                 }
 
                 const newExams = exams.map(e => e.id === examIdToUpdate ? { ...e, type: examType } : e);
@@ -403,7 +437,7 @@
                         }
                         
                         const val = row[key];
-                        const subjectName = key.replace('評点', '').replace('全国', '').trim();
+                        const subjectName = key.replace('全国', '').trim();
                         const scoreNum = Number(val);
                         
                         if (!isNaN(scoreNum) && val.trim() !== '') {
@@ -622,10 +656,19 @@
                 if (!selectedExamId) return [];
                 
                 const currentRecords = records.filter(r => r.examId === selectedExamId);
-                const prevRecords = previousExamId ? records.filter(r => r.examId === previousExamId) : [];
+                let prevRecords = [];
+                if (previousExamId) {
+                    prevRecords = records.filter(r => r.examId === previousExamId);
+                }
 
                 const combined = currentRecords.map(curr => {
-                    const prev = prevRecords.find(p => p.studentId === curr.studentId);
+                    let prev = null;
+                    for (let i = 0; i < prevRecords.length; i++) {
+                        if (prevRecords[i].studentId === curr.studentId) {
+                            prev = prevRecords[i];
+                            break;
+                        }
+                    }
                     const diffs = {};
                     
                     currentSubjects.forEach(sub => {
@@ -674,8 +717,8 @@
                             valA = diffA;
                             valB = diffB;
                         } else {
-                            valA = a.scores[subject] ?? -9999;
-                            valB = b.scores[subject] ?? -9999;
+                            valA = a.scores[subject] !== undefined && a.scores[subject] !== null ? a.scores[subject] : -9999;
+                            valB = b.scores[subject] !== undefined && b.scores[subject] !== null ? b.scores[subject] : -9999;
                         }
                     }
 
@@ -688,13 +731,31 @@
             // 受験者数：定期は「国・社・数・理・英」、ベネッセは「国語点数・数学点数・英語点数」が揃っているか
             const examineeCount = useMemo(() => {
                 if (!selectedExamId) return 0;
-                const isBenesse = exams.find(e => e.id === selectedExamId)?.type === 'benesse';
-                const coreSubjects = isBenesse ? ['国語点数', '数学点数', '英語点数'] : ['国語', '社会', '数学', '理科', '英語'];
+                let foundExam = null;
+                for (let i = 0; i < exams.length; i++) {
+                    if (exams[i].id === selectedExamId) {
+                        foundExam = exams[i];
+                        break;
+                    }
+                }
+                
+                let coreSubjects = ['国語', '社会', '数学', '理科', '英語']; // Default to regular
+                if (foundExam) {
+                    if (foundExam.type === 'benesse') {
+                        coreSubjects = ['国語点数', '数学点数', '英語点数'];
+                    } else if (foundExam.type === 'comprehensive') {
+                        // 学期総合はデータの中にどのようなキーが存在するかで動的に判定
+                        if (currentSubjects.includes('国語評点')) {
+                            coreSubjects = ['国語評点', '社会評点', '数学評点', '理科評点', '英語評点'];
+                        }
+                    }
+                }
+
                 const currentRecords = records.filter(r => r.examId === selectedExamId);
                 return currentRecords.filter(r => {
                     return coreSubjects.every(sub => r.scores[sub] !== undefined && r.scores[sub] !== null);
                 }).length;
-            }, [records, selectedExamId, exams]);
+            }, [records, selectedExamId, exams, currentSubjects]);
 
             const averages = useMemo(() => {
                 if (!selectedExamId) return {};
@@ -732,7 +793,13 @@
             // --- 個人表（統計サマリー）のデータ生成ロジック ---
             const getStudentStats = (studentId) => {
                 const history = currentExams.map(exam => {
-                    const rec = records.find(r => r.examId === exam.id && r.studentId === studentId);
+                    let rec = null;
+                    for (let i = 0; i < records.length; i++) {
+                        if (records[i].examId === exam.id && records[i].studentId === studentId) {
+                            rec = records[i];
+                            break;
+                        }
+                    }
                     return {
                         examId: exam.id,
                         examName: exam.name,
@@ -740,7 +807,15 @@
                     };
                 });
 
-                const rawName = history.find(h => h.record)?.record?.rawName || studentId;
+                let foundRec = null;
+                for (let i = 0; i < history.length; i++) {
+                    if (history[i].record) {
+                        foundRec = history[i];
+                        break;
+                    }
+                }
+                const rawName = (foundRec && foundRec.record && foundRec.record.rawName) ? foundRec.record.rawName : studentId;
+                
                 const stats = {};
                 history.forEach(h => {
                     if (h.record) {
@@ -911,6 +986,22 @@
                 if (sortConfig.direction === 'diff_asc') return <span className="text-red-600 ml-1 text-[12px]" title="下がった順">↘</span>;
             };
 
+            let selectedExamName = '';
+            for(let i=0; i<currentExams.length; i++){
+                if(currentExams[i].id === selectedExamId) {
+                    selectedExamName = currentExams[i].name;
+                    break;
+                }
+            }
+
+            const renderTabType = (type) => {
+                if (type === 'benesse') return { label: '学力推移', bg: 'bg-green-500' };
+                if (type === 'comprehensive') return { label: '学期総合', bg: 'bg-purple-500' };
+                return { label: '定期試験', bg: 'bg-blue-500' };
+            };
+
+            const tabInfo = renderTabType(activeTab);
+
             return (
                 <div>
                     {/* --- MAIN UI (Hides during print) --- */}
@@ -928,7 +1019,7 @@
                                 <div className="bg-blue-600 p-2 rounded-lg">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                                 </div>
-                                <h1 className="text-xl font-bold tracking-wider hidden sm:block">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-2">v2.7</span></h1>
+                                <h1 className="text-xl font-bold tracking-wider hidden sm:block">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-2">v2.10</span></h1>
                             </div>
                             <div className="flex items-center gap-4">
                                 <div className="bg-slate-800 p-1.5 rounded-md flex items-center gap-2 border border-slate-700">
@@ -953,9 +1044,15 @@
                                                 </button>
                                                 <button 
                                                     onClick={() => { handleDownloadSampleCSV('benesse'); setIsDlMenuOpen(false); }}
-                                                    className="w-full text-left px-4 py-3 text-[13px] text-slate-700 hover:bg-blue-50 hover:text-blue-700 font-medium"
+                                                    className="w-full text-left px-4 py-3 text-[13px] text-slate-700 hover:bg-blue-50 hover:text-blue-700 font-medium border-b border-slate-100"
                                                 >
                                                     📄 学力推移調査用 CSV
+                                                </button>
+                                                <button 
+                                                    onClick={() => { handleDownloadSampleCSV('comprehensive'); setIsDlMenuOpen(false); }}
+                                                    className="w-full text-left px-4 py-3 text-[13px] text-slate-700 hover:bg-blue-50 hover:text-blue-700 font-medium"
+                                                >
+                                                    📄 学期総合用 CSV
                                                 </button>
                                             </div>
                                         )}
@@ -963,7 +1060,7 @@
                                     <div className="w-px h-6 bg-slate-700 hidden sm:block"></div>
                                     <input 
                                         type="text" 
-                                        placeholder="試験名 (例: 2年1学期中間)" 
+                                        placeholder="試験名 (例: 1年1学期総合)" 
                                         className="bg-transparent text-[13px] px-2 py-1 outline-none text-white placeholder-slate-400 w-32 md:w-48"
                                         value={importExamName}
                                         onChange={(e) => setImportExamName(e.target.value)}
@@ -992,20 +1089,26 @@
                         <div className="flex flex-1 overflow-hidden relative">
                             
                             {/* Sidebar: Exam List & Tabs */}
-                            <div className={`transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-56 border-r opacity-100' : 'w-0 border-r-0 opacity-0'} bg-white border-slate-200 flex flex-col shrink-0 z-10 overflow-hidden`}>
-                                <div className="w-56 flex flex-col h-full">
-                                    <div className="flex border-b border-slate-200 bg-slate-50">
+                            <div className={`transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-64 border-r opacity-100' : 'w-0 border-r-0 opacity-0'} bg-white border-slate-200 flex flex-col shrink-0 z-10 overflow-hidden`}>
+                                <div className="w-64 flex flex-col h-full">
+                                    <div className="flex border-b border-slate-200 bg-slate-50 flex-wrap">
                                         <button 
-                                            className={`flex-1 py-3 text-[13px] font-bold transition-colors ${activeTab === 'regular' ? 'text-blue-600 border-b-2 border-blue-600 bg-white' : 'text-slate-500 hover:bg-slate-100'}`}
+                                            className={`flex-1 py-2 px-1 text-[12px] font-bold transition-colors whitespace-nowrap ${activeTab === 'regular' ? 'text-blue-600 border-b-2 border-blue-600 bg-white' : 'text-slate-500 hover:bg-slate-100'}`}
                                             onClick={() => setActiveTab('regular')}
                                         >
                                             定期試験
                                         </button>
                                         <button 
-                                            className={`flex-1 py-3 text-[13px] font-bold transition-colors ${activeTab === 'benesse' ? 'text-blue-600 border-b-2 border-blue-600 bg-white' : 'text-slate-500 hover:bg-slate-100'}`}
+                                            className={`flex-1 py-2 px-1 text-[12px] font-bold transition-colors whitespace-nowrap ${activeTab === 'benesse' ? 'text-blue-600 border-b-2 border-blue-600 bg-white' : 'text-slate-500 hover:bg-slate-100'}`}
                                             onClick={() => setActiveTab('benesse')}
                                         >
-                                            学力推移調査
+                                            学力推移
+                                        </button>
+                                        <button 
+                                            className={`flex-1 py-2 px-1 text-[12px] font-bold transition-colors whitespace-nowrap ${activeTab === 'comprehensive' ? 'text-blue-600 border-b-2 border-blue-600 bg-white' : 'text-slate-500 hover:bg-slate-100'}`}
+                                            onClick={() => setActiveTab('comprehensive')}
+                                        >
+                                            学期総合
                                         </button>
                                     </div>
                                     <div className="flex-1 overflow-y-auto bg-slate-50/30">
@@ -1039,10 +1142,10 @@
                                         <div className="p-4 bg-white border-b border-slate-200 flex justify-between items-end shrink-0">
                                             <div>
                                                 <div className="flex items-center gap-2">
-                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded text-white ${activeTab === 'regular' ? 'bg-blue-500' : 'bg-green-500'}`}>
-                                                        {activeTab === 'regular' ? '定期試験' : '学力推移'}
+                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded text-white ${tabInfo.bg}`}>
+                                                        {tabInfo.label}
                                                     </span>
-                                                    <h2 className="text-xl font-bold text-slate-800">{currentExams.find(e => e.id === selectedExamId)?.name}</h2>
+                                                    <h2 className="text-xl font-bold text-slate-800">{selectedExamName}</h2>
                                                 </div>
                                                 <p className="text-xs text-slate-500 mt-1">
                                                     生徒数: <span className="font-semibold">{tableData.length}</span>名 <span className="mx-2">|</span> 
@@ -1278,7 +1381,7 @@
                                                     onClick={handleJsonExport} 
                                                     className="flex-1 border border-slate-300 text-slate-600 font-bold py-2 rounded flex items-center justify-center gap-1 hover:bg-slate-50 transition-colors text-xs bg-white"
                                                 >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> 
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> 
                                                     保存
                                                 </button>
                                                 <label className="flex-1 border border-slate-300 text-slate-600 font-bold py-2 rounded flex items-center justify-center gap-1 hover:bg-slate-50 transition-colors cursor-pointer text-xs bg-white">
@@ -1330,8 +1433,8 @@
                                             </div>
                                             <div className="overflow-hidden">
                                                 <div className="flex items-center gap-2 mb-0.5 sm:mb-1">
-                                                    <span className={`text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded text-white shrink-0 ${activeTab === 'regular' ? 'bg-blue-500' : 'bg-green-500'}`}>
-                                                        {activeTab === 'regular' ? '定期試験' : '学力推移'}
+                                                    <span className={`text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded text-white shrink-0 ${tabInfo.bg}`}>
+                                                        {tabInfo.label}
                                                     </span>
                                                     <span className="text-[10px] text-slate-400 font-mono shrink-0">
                                                         {tableData.findIndex(r => r.studentId === selectedStudentId) + 1} / {tableData.length}
@@ -1477,8 +1580,8 @@
                                             <span style={{ fontSize: '12px', fontWeight: 'normal', color: '#64748b', marginLeft: '12px' }}>成績推移レポート</span>
                                         </h2>
                                         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            <span style={{ fontSize: '10px', fontWeight: 'bold', padding: '4px 8px', borderRadius: '4px', color: 'white', backgroundColor: activeTab === 'regular' ? '#3b82f6' : '#22c55e', WebkitPrintColorAdjust: 'exact' }}>
-                                                {activeTab === 'regular' ? '定期試験' : '学力推移'}
+                                            <span style={{ fontSize: '10px', fontWeight: 'bold', padding: '4px 8px', borderRadius: '4px', color: 'white', backgroundColor: activeTab === 'regular' ? '#3b82f6' : (activeTab === 'comprehensive' ? '#a855f7' : '#22c55e'), WebkitPrintColorAdjust: 'exact' }}>
+                                                {tabInfo.label}
                                             </span>
                                         </div>
                                     </div>
