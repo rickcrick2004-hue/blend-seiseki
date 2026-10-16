@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BLEND 成績推移トラッカー v3.3</title>
+    <title>BLEND 成績推移トラッカー v3.4</title>
     <!-- React & Babelのバージョンを安定版に固定 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
@@ -816,7 +816,7 @@
                 const tabTypes = ['regular', 'benesse', 'comprehensive'];
 
                 tabTypes.forEach(type => {
-                    const typeExams = exams.filter(e => e.type === type);
+                    const typeExams = exams.filter(e => (e.type || 'regular') === type);
                     if (typeExams.length === 0) return;
 
                     const typeRecords = records.filter(r => typeExams.some(e => e.id === r.examId));
@@ -854,7 +854,8 @@
                         };
                     });
 
-                    const rawName = history.find(h => h.record)?.record?.rawName || studentId;
+                    const foundHistory = history.find(h => h.record && h.record.rawName);
+                    const rawName = foundHistory ? foundHistory.record.rawName : studentId;
                     const stats = {};
                     history.forEach(h => {
                         if (h.record) {
@@ -1199,7 +1200,7 @@
                                 <div className="bg-blue-600 p-2 rounded-lg shrink-0">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                                 </div>
-                                <h1 className="text-xl font-bold tracking-wider hidden sm:block whitespace-nowrap">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-2">v3.3</span></h1>
+                                <h1 className="text-xl font-bold tracking-wider hidden sm:block whitespace-nowrap">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-2">v3.4</span></h1>
                             </div>
                             
                             {/* Settings Button & Clear Data */}
@@ -1701,72 +1702,72 @@
                         )}
 
                         {/* Student Detail Modal (Normal Screen UI) */}
-                    {selectedStudentId && studentDetail && (
-                        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-40 p-2 sm:p-4" onClick={() => setSelectedStudentId(null)}>
-                            <div 
-                                className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden" 
-                                onClick={e => e.stopPropagation()}
-                                onTouchStart={handleTouchStart}
-                                onTouchMove={handleTouchMove}
-                                onTouchEnd={handleTouchEnd}
-                            >
-                                {/* Modal Header */}
-                                <div className="bg-slate-800 text-white px-4 py-3 sm:px-6 sm:py-4 flex justify-between items-center shrink-0">
-                                    <div className="flex items-center gap-1 sm:gap-2">
-                                        <button 
-                                            onClick={() => handleNavigateStudent('prev')} 
-                                            className={`p-1 sm:p-2 rounded-full transition-colors shrink-0 ${tableData.findIndex(r => r.studentId === selectedStudentId) > 0 ? 'text-slate-300 hover:text-white hover:bg-slate-700/50' : 'text-slate-600 cursor-not-allowed'}`}
-                                            disabled={tableData.findIndex(r => r.studentId === selectedStudentId) <= 0}
-                                            title="前の生徒 (←)"
-                                        >
-                                            <IconChevronLeft />
-                                        </button>
+                        {selectedStudentId && comprehensiveReportData && (
+                            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-40 p-2 sm:p-4" onClick={() => setSelectedStudentId(null)}>
+                                <div 
+                                    className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden" 
+                                    onClick={e => e.stopPropagation()}
+                                    onTouchStart={handleTouchStart}
+                                    onTouchMove={handleTouchMove}
+                                    onTouchEnd={handleTouchEnd}
+                                >
+                                    {/* Modal Header */}
+                                    <div className="bg-slate-800 text-white px-4 py-3 sm:px-6 sm:py-4 flex justify-between items-center shrink-0">
+                                        <div className="flex items-center gap-1 sm:gap-2">
+                                            <button 
+                                                onClick={() => handleNavigateStudent('prev')} 
+                                                className={`p-1 sm:p-2 rounded-full transition-colors shrink-0 ${tableData.findIndex(r => r.studentId === selectedStudentId) > 0 ? 'text-slate-300 hover:text-white hover:bg-slate-700/50' : 'text-slate-600 cursor-not-allowed'}`}
+                                                disabled={tableData.findIndex(r => r.studentId === selectedStudentId) <= 0}
+                                                title="前の生徒 (←)"
+                                            >
+                                                <IconChevronLeft />
+                                            </button>
 
-                                        <div className="flex items-center gap-3 sm:gap-4 mx-1 sm:mx-2 w-48 sm:w-72">
-                                            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-500 rounded-full flex items-center justify-center text-lg sm:text-xl font-bold shadow-inner shrink-0">
-                                                {studentDetail.rawName.charAt(0)}
-                                            </div>
-                                            <div className="overflow-hidden">
-                                                <div className="flex items-center gap-2 mb-0.5 sm:mb-1">
-                                                    <span className="text-[10px] text-slate-400 font-mono shrink-0 bg-slate-700 px-1.5 py-0.5 rounded">
-                                                        {tableData.findIndex(r => r.studentId === selectedStudentId) + 1} / {tableData.length}
-                                                    </span>
+                                            <div className="flex items-center gap-3 sm:gap-4 mx-1 sm:mx-2 w-48 sm:w-72">
+                                                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-500 rounded-full flex items-center justify-center text-lg sm:text-xl font-bold shadow-inner shrink-0">
+                                                    {currentStudentName ? currentStudentName.charAt(0) : ''}
                                                 </div>
-                                                <h2 className="text-xl sm:text-2xl font-bold leading-none truncate">{studentDetail.rawName}</h2>
+                                                <div className="overflow-hidden">
+                                                    <div className="flex items-center gap-2 mb-0.5 sm:mb-1">
+                                                        <span className="text-[10px] text-slate-400 font-mono shrink-0 bg-slate-700 px-1.5 py-0.5 rounded">
+                                                            {tableData.findIndex(r => r.studentId === selectedStudentId) + 1} / {tableData.length}
+                                                        </span>
+                                                    </div>
+                                                    <h2 className="text-xl sm:text-2xl font-bold leading-none truncate">{currentStudentName}</h2>
+                                                </div>
                                             </div>
+
+                                            <button 
+                                                onClick={() => handleNavigateStudent('next')} 
+                                                className={`p-1 sm:p-2 rounded-full transition-colors shrink-0 ${tableData.findIndex(r => r.studentId === selectedStudentId) < tableData.length - 1 ? 'text-slate-300 hover:text-white hover:bg-slate-700/50' : 'text-slate-600 cursor-not-allowed'}`}
+                                                disabled={tableData.findIndex(r => r.studentId === selectedStudentId) >= tableData.length - 1}
+                                                title="次の生徒 (→)"
+                                            >
+                                                <IconChevronRight />
+                                            </button>
                                         </div>
-
-                                        <button 
-                                            onClick={() => handleNavigateStudent('next')} 
-                                            className={`p-1 sm:p-2 rounded-full transition-colors shrink-0 ${tableData.findIndex(r => r.studentId === selectedStudentId) < tableData.length - 1 ? 'text-slate-300 hover:text-white hover:bg-slate-700/50' : 'text-slate-600 cursor-not-allowed'}`}
-                                            disabled={tableData.findIndex(r => r.studentId === selectedStudentId) >= tableData.length - 1}
-                                            title="次の生徒 (→)"
-                                        >
-                                            <IconChevronRight />
-                                        </button>
+                                        <div className="flex items-center gap-3">
+                                            <button 
+                                                onClick={() => {
+                                                    // 個人の場合は現在の全種別を出力する
+                                                    triggerPrint([selectedStudentId], { regular: true, benesse: true, comprehensive: true });
+                                                }}
+                                                className="hidden sm:flex text-xs bg-slate-700 hover:bg-slate-600 text-white font-bold py-1.5 px-3 rounded border border-slate-600 items-center gap-1 shadow-sm transition-colors"
+                                            >
+                                                <IconPrinter /> この生徒をPDF出力
+                                            </button>
+                                            <button onClick={() => setSelectedStudentId(null)} className="text-slate-400 hover:text-white transition-colors bg-slate-700/50 p-1.5 sm:p-2 rounded-full shrink-0">
+                                                <IconX />
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center gap-3">
-                                        <button 
-                                            onClick={() => {
-                                                // 個人の場合は現在の全種別を出力する
-                                                triggerPrint([selectedStudentId], { regular: true, benesse: true, comprehensive: true });
-                                            }}
-                                            className="hidden sm:flex text-xs bg-slate-700 hover:bg-slate-600 text-white font-bold py-1.5 px-3 rounded border border-slate-600 items-center gap-1 shadow-sm transition-colors"
-                                        >
-                                            <IconPrinter /> この生徒をPDF出力
-                                        </button>
-                                        <button onClick={() => setSelectedStudentId(null)} className="text-slate-400 hover:text-white transition-colors bg-slate-700/50 p-1.5 sm:p-2 rounded-full shrink-0">
-                                            <IconX />
-                                        </button>
-                                    </div>
-                                </div>
 
-                                {/* Modal Body */}
+                                    {/* Modal Body */}
                                     <div className="p-4 sm:p-6 overflow-y-auto bg-slate-50 flex-1">
-                                        {studentDetail.history.length === 0 ? (
+                                        {comprehensiveReportData.length === 0 ? (
                                             <div className="text-center text-slate-500 py-10">データがありません</div>
                                         ) : (
-                                            getComprehensiveStudentReport(selectedStudentId).map(section => (
+                                            comprehensiveReportData.map(section => (
                                                 <ReportSection key={section.type} section={section} isPrint={false} />
                                             ))
                                         )}
