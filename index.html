@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BLEND 成績推移トラッカー v3.0</title>
+    <title>BLEND 成績推移トラッカー v3.3</title>
     <!-- React & Babelのバージョンを安定版に固定 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
@@ -146,7 +146,7 @@
             return subs.some(s => subjectName.includes(s));
         };
 
-        // --- STREAMING_CHUNK:Defining SVG Icons... ---
+        // --- SVG Icons ---
         const IconMenu = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>;
         const IconUpload = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
         const IconDownload = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
@@ -164,7 +164,7 @@
         const IconFileJson = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M10 12a1 1 0 0 0-1 1v1a1 1 0 0 1-1 1 1 1 0 0 1 1 1v1a1 1 0 0 0 1 1"></path><path d="M14 18a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1 1 1 0 0 1-1-1v-1a1 1 0 0 0-1-1"></path></svg>;
         const IconPrinter = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>;
 
-        // --- STREAMING_CHUNK:Initializing React Component... ---
+        // --- Main Application Component ---
         const App = () => {
             // State
             const [exams, setExams] = useState([]); // [{ id, name, type, order }]
@@ -177,14 +177,25 @@
             // UI State
             const [importExamName, setImportExamName] = useState('');
             const [isDlMenuOpen, setIsDlMenuOpen] = useState(false);
-            const [isPrinting, setIsPrinting] = useState(false);
-            const [printTargetId, setPrintTargetId] = useState(null); // 'ALL' or studentId
             const [isSidebarOpen, setIsSidebarOpen] = useState(true);
             const fileInputRef = useRef(null);
 
             // スワイプ用のRef
             const touchStartX = useRef(null);
             const touchEndX = useRef(null);
+
+            // Print State (v3.3)
+            const [isPrinting, setIsPrinting] = useState(false);
+            const [printTargetIds, setPrintTargetIds] = useState([]); 
+            const [printTargetTypes, setPrintTargetTypes] = useState({ regular: true, benesse: true, comprehensive: true });
+            
+            const [isPrintMenuOpen, setIsPrintMenuOpen] = useState(false);
+            const [printConfig, setPrintConfig] = useState({
+                types: { regular: true, benesse: true, comprehensive: true },
+                mode: 'all', // 'all', 'class', 'individual'
+                targetClass: '',
+                selectedStudents: []
+            });
 
             // Settings & Sync State
             const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -200,7 +211,7 @@
                 return () => document.removeEventListener('click', handleClickOutside);
             }, []);
 
-            // --- STREAMING_CHUNK:Loading Data from LocalStorage... ---
+            // Load data from localStorage
             useEffect(() => {
                 try {
                     const savedExams = localStorage.getItem('blend_exams');
@@ -214,7 +225,6 @@
                     const savedRecords = localStorage.getItem('blend_records');
                     if (savedRecords) {
                         const parsedRecords = JSON.parse(savedRecords);
-                        // 古いデータのキー名から「全国」を削除してセットする
                         setRecords(migrateRecords(parsedRecords));
                     }
                 } catch(e) { console.error("Error parsing records from local storage", e); }
@@ -265,7 +275,7 @@
                 }
             }, [currentExams, selectedExamId]);
 
-            // --- STREAMING_CHUNK:Event Handlers for CSV & Data... ---
+            // --- Handlers ---
             const handleImportCSV = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -353,6 +363,7 @@
 
                 const newExamId = generateId();
                 const newExam = { id: newExamId, name: examName, order: exams.length, type: examType };
+                
                 const newRecords = [];
 
                 data.forEach(row => {
@@ -392,7 +403,14 @@
                     });
 
                     newRecords.push({
-                        examId: newExamId, studentId, rawName, grade, class: cls, no: parseInt(no) || 0, scholarship, scores
+                        examId: newExamId,
+                        studentId,
+                        rawName,
+                        grade,
+                        class: cls,
+                        no: parseInt(no) || 0,
+                        scholarship,
+                        scores
                     });
                 });
 
@@ -430,7 +448,9 @@
                     const rawName = row['氏名'] || row['名前'] || '';
                     
                     let scholarship = '';
+                    
                     if (!rawName) return; 
+                    
                     const studentId = normalizeName(rawName);
                     const scores = {};
 
@@ -458,7 +478,14 @@
                     });
 
                     newRecordsForExam.push({
-                        examId: examIdToUpdate, studentId, rawName, grade, class: cls, no: parseInt(no) || 0, scholarship, scores
+                        examId: examIdToUpdate,
+                        studentId,
+                        rawName,
+                        grade,
+                        class: cls,
+                        no: parseInt(no) || 0,
+                        scholarship,
+                        scores
                     });
                 });
 
@@ -513,7 +540,8 @@
                 }
             };
 
-            // --- STREAMING_CHUNK:Firebase Sync Logic... ---
+            // --- Sync Handlers (Firebase & JSON) ---
+
             const getFirebaseDb = () => {
                 if (!firebaseConfig.trim()) throw new Error('Firebase設定が入力されていません。');
                 let configObj;
@@ -567,7 +595,9 @@
                     if (doc.exists) {
                         const data = doc.data();
                         setExams(data.exams || []);
+                        
                         setRecords(migrateRecords(data.records || []));
+                        
                         alert('クラウドからデータを取得しました。');
                     } else {
                         alert('指定されたSync IDのデータが見つかりません。');
@@ -616,7 +646,8 @@
                 reader.readAsText(file);
             };
 
-            // --- STREAMING_CHUNK:Processing Table Data... ---
+            // --- Data Processing for View ---
+            
             const currentSubjects = useMemo(() => {
                 if (!selectedExamId) return [];
                 const examRecords = records.filter(r => r.examId === selectedExamId);
@@ -626,6 +657,7 @@
                 });
                 
                 const subArray = Array.from(subjects);
+                
                 subArray.sort((a, b) => {
                     const idxA = SUBJECT_ORDER.indexOf(a);
                     const idxB = SUBJECT_ORDER.indexOf(b);
@@ -634,6 +666,7 @@
                     if (idxB !== -1) return 1;
                     return a.localeCompare(b);
                 });
+
                 return subArray;
             }, [records, selectedExamId]);
 
@@ -662,6 +695,7 @@
                         }
                     }
                     const diffs = {};
+                    
                     currentSubjects.forEach(sub => {
                         const currentScore = curr.scores[sub];
                         if (prev && prev.scores[sub] !== undefined && currentScore !== undefined) {
@@ -717,6 +751,15 @@
                 });
             }, [records, selectedExamId, previousExamId, currentSubjects, sortConfig]);
 
+            // 利用可能なクラスのリスト（印刷設定用）
+            const availableClasses = useMemo(() => {
+                const classes = new Set();
+                tableData.forEach(r => {
+                    if (r.class) classes.add(r.class);
+                });
+                return Array.from(classes).sort();
+            }, [tableData]);
+
             const examineeCount = useMemo(() => {
                 if (!selectedExamId) return 0;
                 let foundExam = null;
@@ -737,11 +780,13 @@
             const averages = useMemo(() => {
                 if (!selectedExamId) return {};
                 const currentRecords = records.filter(r => r.examId === selectedExamId);
+                
                 const sums = {};
                 const counts = {};
                 
                 currentSubjects.forEach(sub => {
-                    sums[sub] = 0; counts[sub] = 0;
+                    sums[sub] = 0;
+                    counts[sub] = 0;
                 });
 
                 currentRecords.forEach(r => {
@@ -765,9 +810,7 @@
                 return avgs;
             }, [records, selectedExamId, currentSubjects]);
 
-            // --- STREAMING_CHUNK:Generating Comprehensive Student Reports... ---
-            
-            // 全タブ（定期・学推・総合）の成績推移データを一括生成する関数
+            // --- 個人表（統計サマリー）のデータ生成ロジック ---
             const getComprehensiveStudentReport = (studentId) => {
                 const reportSections = [];
                 const tabTypes = ['regular', 'benesse', 'comprehensive'];
@@ -776,7 +819,6 @@
                     const typeExams = exams.filter(e => e.type === type);
                     if (typeExams.length === 0) return;
 
-                    // この試験種別で生徒が受験した全科目を抽出
                     const typeRecords = records.filter(r => typeExams.some(e => e.id === r.examId));
                     const subjectsSet = new Set();
                     typeRecords.filter(r => r.studentId === studentId).forEach(r => {
@@ -794,7 +836,6 @@
 
                     if (subjectsArray.length === 0) return;
 
-                    // 主要教科と実技(9教科系)に分割
                     const mainSubjects = subjectsArray.filter(sub => !isSubSubject(sub));
                     const subSubjects = subjectsArray.filter(sub => isSubSubject(sub));
 
@@ -872,6 +913,7 @@
             // --- Navigation Handler ---
             const handleNavigateStudent = (direction) => {
                 if (!selectedStudentId || tableData.length === 0) return;
+                
                 const currentIndex = tableData.findIndex(r => r.studentId === selectedStudentId);
                 if (currentIndex === -1) return;
 
@@ -890,34 +932,57 @@
             useEffect(() => {
                 const handleKeyDown = (e) => {
                     if (!selectedStudentId) return;
-                    if (e.key === 'ArrowRight') handleNavigateStudent('next');
-                    else if (e.key === 'ArrowLeft') handleNavigateStudent('prev');
+                    if (e.key === 'ArrowRight') {
+                        handleNavigateStudent('next');
+                    } else if (e.key === 'ArrowLeft') {
+                        handleNavigateStudent('prev');
+                    }
                 };
+
                 window.addEventListener('keydown', handleKeyDown);
                 return () => window.removeEventListener('keydown', handleKeyDown);
             }, [selectedStudentId, tableData]);
 
-            const handleTouchStart = (e) => { touchStartX.current = e.targetTouches[0].clientX; };
-            const handleTouchMove = (e) => { touchEndX.current = e.targetTouches[0].clientX; };
+            const handleTouchStart = (e) => {
+                touchStartX.current = e.targetTouches[0].clientX;
+            };
+
+            const handleTouchMove = (e) => {
+                touchEndX.current = e.targetTouches[0].clientX;
+            };
+
             const handleTouchEnd = () => {
                 if (!touchStartX.current || !touchEndX.current) return;
                 const distance = touchStartX.current - touchEndX.current;
-                if (distance > 50) handleNavigateStudent('next');
-                else if (distance < -50) handleNavigateStudent('prev');
+                
+                if (distance > 50) {
+                    handleNavigateStudent('next');
+                } else if (distance < -50) {
+                    handleNavigateStudent('prev');
+                }
+                
                 touchStartX.current = null;
                 touchEndX.current = null;
             };
 
-            // --- Export / Print Handlers ---
+            // --- CSV Export Handler ---
             const handleExportCurrentExamCSV = () => {
                 if (!selectedExamId) return;
                 const exam = exams.find(e => e.id === selectedExamId);
                 if (!exam) return;
-                if (tableData.length === 0) return alert('出力するデータがありません。');
+
+                if (tableData.length === 0) {
+                    alert('出力するデータがありません。');
+                    return;
+                }
 
                 const csvData = tableData.map(r => {
                     const row = {
-                        '学年': r.grade, '組': r.class, '出席番号': r.no, '氏名': r.rawName, '学園奨学生': r.scholarship || ''
+                        '学年': r.grade,
+                        '組': r.class,
+                        '出席番号': r.no,
+                        '氏名': r.rawName,
+                        '学園奨学生': r.scholarship || ''
                     };
                     currentSubjects.forEach(sub => {
                         row[sub] = r.scores[sub] !== undefined ? r.scores[sub] : '';
@@ -937,18 +1002,45 @@
                 document.body.removeChild(link);
             };
 
-            const triggerPrint = (targetId) => {
-                setPrintTargetId(targetId);
+            // --- Print PDF Handler ---
+            const triggerPrint = (targetIds, typesConfig) => {
+                setPrintTargetIds(targetIds);
+                setPrintTargetTypes(typesConfig);
                 setIsPrinting(true);
                 setTimeout(() => {
-                    if(targetId === 'ALL') alert("印刷プレビューが開きます。\n「送信先（プリンター）」を「PDFに保存」にして保存してください。");
+                    if(targetIds.length > 1) alert("印刷プレビューが開きます。\n「送信先（プリンター）」を「PDFに保存」にして保存してください。");
                     window.print();
                     setIsPrinting(false);
-                    setPrintTargetId(null);
-                }, 800); // 描画を待つため少し長めに待機
+                    setPrintTargetIds([]);
+                }, 800);
             };
 
-            // --- STREAMING_CHUNK:UI Rendering Helpers... ---
+            const executePrintFromSettings = () => {
+                let targets = [];
+                if (printConfig.mode === 'all') {
+                    targets = tableData.map(r => r.studentId);
+                } else if (printConfig.mode === 'class') {
+                    targets = tableData.filter(r => r.class === printConfig.targetClass).map(r => r.studentId);
+                } else if (printConfig.mode === 'individual') {
+                    targets = printConfig.selectedStudents;
+                }
+
+                if (targets.length === 0) {
+                    alert('出力対象の生徒が選択されていません。');
+                    return;
+                }
+                
+                if (!printConfig.types.regular && !printConfig.types.benesse && !printConfig.types.comprehensive) {
+                    alert('出力する試験種別を1つ以上選択してください。');
+                    return;
+                }
+
+                setIsPrintMenuOpen(false);
+                triggerPrint(targets, printConfig.types);
+            };
+
+
+            // --- Render Helpers ---
             const renderDiffText = (diff, subjectName = '', extraClass = '') => {
                 if (diff === undefined || diff === null || isNaN(diff)) return null;
                 const isFloat = typeof subjectName === 'string' && (subjectName.includes('平均') || subjectName.includes('偏差値'));
@@ -957,8 +1049,12 @@
                 const diffNum = Number(formattedDiff);
 
                 if (diffNum === 0) return <span className={`text-slate-400 ${extraClass}`}>(±0)</span>;
-                if (diffNum > 0) return <span className={`font-medium ${isRank ? 'text-red-500' : 'text-green-600'} ${extraClass}`}>(+{formattedDiff})</span>;
-                return <span className={`font-medium ${isRank ? 'text-green-600' : 'text-red-500'} ${extraClass}`}>({formattedDiff})</span>;
+
+                if (diffNum > 0) {
+                    return <span className={`font-medium ${isRank ? 'text-red-500' : 'text-green-600'} ${extraClass}`}>(+{formattedDiff})</span>;
+                } else {
+                    return <span className={`font-medium ${isRank ? 'text-green-600' : 'text-red-500'} ${extraClass}`}>({formattedDiff})</span>;
+                }
             };
 
             const renderSortIcon = (key) => {
@@ -977,12 +1073,10 @@
                 }
             }
 
-            // --- STREAMING_CHUNK:Reusable Report Section Component... ---
-            // 統合レポートの1セクションを描画するコンポーネント (画面・PDF兼用)
+            // --- Report Section Component (Reusable) ---
             const ReportSection = ({ section, isPrint }) => {
                 if (!section) return null;
                 
-                // ヒートマップのテーブルを描画する関数
                 const renderTable = (subjects, titleSuffix) => {
                     if (!subjects || subjects.length === 0) return null;
                     return (
@@ -1057,7 +1151,6 @@
                             {section.title} <span className="text-xs font-normal text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">全{section.history.filter(h=>h.record).length}回</span>
                         </h3>
                         
-                        {/* Stats Grid */}
                         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 mb-4 avoid-break">
                             {[...section.mainSubjects, ...section.subSubjects].map(sub => {
                                 const stat = section.stats[sub];
@@ -1083,7 +1176,6 @@
                             })}
                         </div>
 
-                        {/* Trend Tables (Split into 2 if there are sub subjects) */}
                         {renderTable(section.mainSubjects, section.subSubjects.length > 0 ? "主要教科" : "")}
                         {renderTable(section.subSubjects, "実技・総合")}
                     </div>
@@ -1095,88 +1187,85 @@
                     {/* --- MAIN UI (Hides during print) --- */}
                     <div className={isPrinting ? 'no-print' : 'flex flex-col h-screen overflow-hidden'}>
                         {/* Header */}
-                        <header className="bg-slate-900 text-white p-4 flex justify-between items-center shrink-0 relative z-40">
-                            <div className="flex items-center gap-3">
+                        <header className="bg-slate-900 text-white p-3 sm:p-4 flex flex-wrap justify-between items-center shrink-0 relative z-40 gap-y-3">
+                            <div className="flex items-center gap-3 order-1">
                                 <button 
                                     onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
-                                    className="text-slate-300 hover:text-white transition-colors p-1.5 rounded hover:bg-slate-800"
+                                    className="text-slate-300 hover:text-white transition-colors p-1.5 rounded hover:bg-slate-800 shrink-0"
                                     title="サイドバーの開閉"
                                 >
                                     <IconMenu />
                                 </button>
-                                <div className="bg-blue-600 p-2 rounded-lg">
+                                <div className="bg-blue-600 p-2 rounded-lg shrink-0">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                                 </div>
-                                <h1 className="text-xl font-bold tracking-wider hidden sm:block">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-2">v3.1</span></h1>
+                                <h1 className="text-xl font-bold tracking-wider hidden sm:block whitespace-nowrap">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-2">v3.3</span></h1>
                             </div>
-                            <div className="flex items-center gap-4">
-                                <div className="bg-slate-800 p-1.5 rounded-md flex items-center gap-2 border border-slate-700">
-                                    {/* Download Dropdown */}
-                                    <div className="relative">
-                                        <button 
-                                            onClick={(e) => { e.stopPropagation(); setIsDlMenuOpen(!isDlMenuOpen); }} 
-                                            className="text-slate-300 hover:text-white text-[13px] py-1.5 px-3 rounded flex items-center gap-1 transition-colors"
-                                            title="データフォーマット（CSV）をダウンロード"
-                                        >
-                                            <IconDownload />
-                                            <span className="hidden md:inline">フォーマットDL</span>
-                                            <IconChevronDown />
-                                        </button>
-                                        {isDlMenuOpen && (
-                                            <div className="absolute top-full left-0 mt-1 bg-white border border-slate-200 rounded shadow-xl z-50 overflow-hidden min-w-[160px]">
-                                                <button 
-                                                    onClick={() => { handleDownloadSampleCSV('regular'); setIsDlMenuOpen(false); }}
-                                                    className="w-full text-left px-4 py-3 text-[13px] text-slate-700 hover:bg-blue-50 hover:text-blue-700 font-medium border-b border-slate-100"
-                                                >
-                                                    📄 定期試験用 CSV
-                                                </button>
-                                                <button 
-                                                    onClick={() => { handleDownloadSampleCSV('comprehensive'); setIsDlMenuOpen(false); }}
-                                                    className="w-full text-left px-4 py-3 text-[13px] text-slate-700 hover:bg-blue-50 hover:text-blue-700 font-medium border-b border-slate-100"
-                                                >
-                                                    📄 学期総合用 CSV
-                                                </button>
-                                                <button 
-                                                    onClick={() => { handleDownloadSampleCSV('benesse'); setIsDlMenuOpen(false); }}
-                                                    className="w-full text-left px-4 py-3 text-[13px] text-slate-700 hover:bg-blue-50 hover:text-blue-700 font-medium"
-                                                >
-                                                    📄 学力推移調査用 CSV
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="w-px h-6 bg-slate-700 hidden sm:block"></div>
-                                    <input 
-                                        type="text" 
-                                        placeholder="試験名 (例: 2年1学期中間)" 
-                                        className="bg-transparent text-[13px] px-2 py-1 outline-none text-white placeholder-slate-400 w-32 md:w-48"
-                                        value={importExamName}
-                                        onChange={(e) => setImportExamName(e.target.value)}
-                                    />
-                                    <label className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white text-[13px] py-1.5 px-3 rounded flex items-center gap-1 transition-colors">
-                                        <IconUpload />
-                                        <span>CSV読込</span>
-                                        <input type="file" accept=".csv" className="hidden" ref={fileInputRef} onChange={handleImportCSV} />
-                                    </label>
-                                </div>
-                                
-                                <div className="w-px h-6 bg-slate-700 hidden sm:block"></div>
-                                
-                                {/* Settings Button */}
+                            
+                            {/* Settings Button & Clear Data */}
+                            <div className="flex items-center gap-1 sm:gap-2 order-2 sm:order-3 ml-auto sm:ml-0 shrink-0">
                                 <button onClick={() => setIsSettingsOpen(true)} className="text-slate-300 hover:text-white transition-colors p-2 rounded hover:bg-slate-800" title="データ同期と設定">
                                     <IconSettings />
                                 </button>
-                                
-                                <button onClick={handleClearData} className="text-slate-400 hover:text-red-400 transition-colors ml-2" title="全データクリア">
+                                <button onClick={handleClearData} className="text-slate-400 hover:text-red-400 transition-colors p-2 rounded" title="全データクリア">
                                     <IconTrash />
                                 </button>
                             </div>
+
+                            {/* CSV Import Block */}
+                            <div className="bg-slate-800 p-1.5 rounded-md flex items-center gap-1 sm:gap-2 border border-slate-700 w-full sm:w-auto order-3 sm:order-2">
+                                <div className="relative shrink-0">
+                                    <button 
+                                        onClick={(e) => { e.stopPropagation(); setIsDlMenuOpen(!isDlMenuOpen); }} 
+                                        className="text-slate-300 hover:text-white text-[13px] py-1.5 px-2 sm:px-3 rounded flex items-center gap-1 transition-colors"
+                                    >
+                                        <IconDownload />
+                                        <span className="hidden md:inline">フォーマットDL</span>
+                                        <IconChevronDown />
+                                    </button>
+                                    {isDlMenuOpen && (
+                                        <div className="absolute top-full left-0 mt-1 bg-white border border-slate-200 rounded shadow-xl z-50 overflow-hidden min-w-[160px]">
+                                            <button 
+                                                onClick={() => { handleDownloadSampleCSV('regular'); setIsDlMenuOpen(false); }}
+                                                className="w-full text-left px-4 py-3 text-[13px] text-slate-700 hover:bg-blue-50 hover:text-blue-700 font-medium border-b border-slate-100"
+                                            >
+                                                📄 定期試験用 CSV
+                                            </button>
+                                            <button 
+                                                onClick={() => { handleDownloadSampleCSV('comprehensive'); setIsDlMenuOpen(false); }}
+                                                className="w-full text-left px-4 py-3 text-[13px] text-slate-700 hover:bg-blue-50 hover:text-blue-700 font-medium border-b border-slate-100"
+                                            >
+                                                📄 学期総合用 CSV
+                                            </button>
+                                            <button 
+                                                onClick={() => { handleDownloadSampleCSV('benesse'); setIsDlMenuOpen(false); }}
+                                                className="w-full text-left px-4 py-3 text-[13px] text-slate-700 hover:bg-blue-50 hover:text-blue-700 font-medium"
+                                            >
+                                                📄 学力推移調査用 CSV
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="w-px h-6 bg-slate-700 hidden sm:block mx-1"></div>
+                                <input 
+                                    type="text" 
+                                    placeholder="試験名 (例: 2年1学期中間)" 
+                                    className="bg-transparent text-[13px] px-2 py-1 outline-none text-white placeholder-slate-400 flex-1 min-w-[100px] sm:w-32 md:w-48"
+                                    value={importExamName}
+                                    onChange={(e) => setImportExamName(e.target.value)}
+                                />
+                                <label className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white text-[13px] py-1.5 px-3 rounded flex items-center gap-1 transition-colors shrink-0">
+                                    <IconUpload />
+                                    <span>CSV読込</span>
+                                    <input type="file" accept=".csv" className="hidden" ref={fileInputRef} onChange={handleImportCSV} />
+                                </label>
+                            </div>
                         </header>
 
-                        {/* --- STREAMING_CHUNK:Main Layout Structure... --- */}
+                        {/* Main Content Area */}
                         <div className="flex flex-1 overflow-hidden relative">
                             
-                            {/* Sidebar */}
+                            {/* Sidebar: Exam List & Tabs */}
                             <div className={`transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-56 border-r opacity-100' : 'w-0 border-r-0 opacity-0'} bg-white border-slate-200 flex flex-col shrink-0 z-10 overflow-hidden`}>
                                 <div className="w-56 flex flex-col h-full">
                                     <div className="flex border-b border-slate-200 bg-slate-50 flex-wrap">
@@ -1252,11 +1341,16 @@
                                                 >
                                                     <IconDownload /> 表示順でCSV保存
                                                 </button>
+                                                {/* NEW: PDF Print Settings Button */}
                                                 <button 
-                                                    onClick={() => triggerPrint('ALL')}
+                                                    onClick={() => {
+                                                        // 設定メニューを開く前に、初期値として現在表示中の生徒一覧を全選択状態にしておく
+                                                        setPrintConfig(prev => ({...prev, selectedStudents: tableData.map(r => r.studentId)}));
+                                                        setIsPrintMenuOpen(true);
+                                                    }}
                                                     className="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold py-1.5 px-2 rounded border border-emerald-200 flex items-center gap-1 shadow-sm transition-colors"
                                                 >
-                                                    <IconPrinter /> 全員の個人表をPDF/印刷
+                                                    <IconPrinter /> PDF/印刷出力設定
                                                 </button>
                                             </div>
                                         </div>
@@ -1493,73 +1587,186 @@
                             </div>
                         </div>
 
-                        {/* --- STREAMING_CHUNK:Student Detail Modal... --- */}
-                        {selectedStudentId && comprehensiveReportData && (
-                            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4" onClick={() => setSelectedStudentId(null)}>
-                                <div 
-                                    className="bg-white rounded-xl shadow-2xl w-full max-w-5xl h-[95vh] flex flex-col overflow-hidden" 
-                                    onClick={e => e.stopPropagation()}
-                                    onTouchStart={handleTouchStart}
-                                    onTouchMove={handleTouchMove}
-                                    onTouchEnd={handleTouchEnd}
-                                >
-                                    {/* Modal Header */}
-                                    <div className="bg-slate-800 text-white px-4 py-3 sm:px-6 sm:py-4 flex justify-between items-center shrink-0">
-                                        <div className="flex items-center gap-1 sm:gap-2">
-                                            <button 
-                                                onClick={() => handleNavigateStudent('prev')} 
-                                                className={`p-1 sm:p-2 rounded-full transition-colors shrink-0 ${tableData.findIndex(r => r.studentId === selectedStudentId) > 0 ? 'text-slate-300 hover:text-white hover:bg-slate-700/50' : 'text-slate-600 cursor-not-allowed'}`}
-                                                disabled={tableData.findIndex(r => r.studentId === selectedStudentId) <= 0}
-                                                title="前の生徒 (←)"
-                                            >
-                                                <IconChevronLeft />
-                                            </button>
-
-                                            <div className="flex items-center gap-3 sm:gap-4 mx-1 sm:mx-2 w-56 sm:w-80">
-                                                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-500 rounded-full flex items-center justify-center text-lg sm:text-xl font-bold shadow-inner shrink-0">
-                                                    {currentStudentName.charAt(0)}
-                                                </div>
-                                                <div className="overflow-hidden">
-                                                    <div className="flex items-center gap-2 mb-0.5 sm:mb-1">
-                                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded text-white bg-slate-600 shrink-0">
-                                                            個人統合レポート
-                                                        </span>
-                                                        <span className="text-[10px] text-slate-400 font-mono shrink-0">
-                                                            {tableData.findIndex(r => r.studentId === selectedStudentId) + 1} / {tableData.length}
-                                                        </span>
-                                                    </div>
-                                                    <h2 className="text-xl sm:text-2xl font-bold leading-none truncate">{currentStudentName}</h2>
-                                                </div>
+                        {/* --- PRINT MENU MODAL (v3.3) --- */}
+                        {isPrintMenuOpen && (
+                            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setIsPrintMenuOpen(false)}>
+                                <div className="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+                                    <div className="bg-slate-800 text-white px-4 py-3 flex justify-between items-center">
+                                        <h3 className="font-bold flex items-center gap-2"><IconPrinter /> PDF/印刷 出力設定</h3>
+                                        <button onClick={() => setIsPrintMenuOpen(false)} className="text-slate-400 hover:text-white p-1 rounded-full transition-colors"><IconX /></button>
+                                    </div>
+                                    <div className="p-5 overflow-y-auto max-h-[80vh] bg-slate-50 flex flex-col gap-6">
+                                        
+                                        {/* 1. 出力項目の選択 */}
+                                        <div className="flex flex-col gap-3">
+                                            <h4 className="font-bold text-slate-700 text-sm border-b border-slate-200 pb-1">1. 出力する試験の種別</h4>
+                                            <div className="grid grid-cols-1 gap-2">
+                                                <label className="flex items-center gap-3 cursor-pointer p-2.5 border border-slate-200 bg-white rounded-lg hover:bg-blue-50 transition-colors shadow-sm">
+                                                    <input type="checkbox" className="w-5 h-5 text-blue-600 rounded" checked={printConfig.types.regular} onChange={(e) => setPrintConfig({...printConfig, types: {...printConfig.types, regular: e.target.checked}})} />
+                                                    <span className="font-bold text-sm text-blue-700">定期試験を含める</span>
+                                                </label>
+                                                <label className="flex items-center gap-3 cursor-pointer p-2.5 border border-slate-200 bg-white rounded-lg hover:bg-green-50 transition-colors shadow-sm">
+                                                    <input type="checkbox" className="w-5 h-5 text-green-600 rounded" checked={printConfig.types.benesse} onChange={(e) => setPrintConfig({...printConfig, types: {...printConfig.types, benesse: e.target.checked}})} />
+                                                    <span className="font-bold text-sm text-green-700">学力推移調査を含める</span>
+                                                </label>
+                                                <label className="flex items-center gap-3 cursor-pointer p-2.5 border border-slate-200 bg-white rounded-lg hover:bg-purple-50 transition-colors shadow-sm">
+                                                    <input type="checkbox" className="w-5 h-5 text-purple-600 rounded" checked={printConfig.types.comprehensive} onChange={(e) => setPrintConfig({...printConfig, types: {...printConfig.types, comprehensive: e.target.checked}})} />
+                                                    <span className="font-bold text-sm text-purple-700">学期総合を含める</span>
+                                                </label>
                                             </div>
-
-                                            <button 
-                                                onClick={() => handleNavigateStudent('next')} 
-                                                className={`p-1 sm:p-2 rounded-full transition-colors shrink-0 ${tableData.findIndex(r => r.studentId === selectedStudentId) < tableData.length - 1 ? 'text-slate-300 hover:text-white hover:bg-slate-700/50' : 'text-slate-600 cursor-not-allowed'}`}
-                                                disabled={tableData.findIndex(r => r.studentId === selectedStudentId) >= tableData.length - 1}
-                                                title="次の生徒 (→)"
-                                            >
-                                                <IconChevronRight />
-                                            </button>
                                         </div>
-                                        <div className="flex items-center gap-4">
-                                            <button 
-                                                onClick={() => triggerPrint(selectedStudentId)}
-                                                className="hidden sm:flex text-xs bg-slate-700 hover:bg-slate-600 text-white font-bold py-1.5 px-3 rounded border border-slate-600 items-center gap-1 shadow-sm transition-colors"
-                                            >
-                                                <IconPrinter /> この生徒をPDF出力
-                                            </button>
-                                            <button onClick={() => setSelectedStudentId(null)} className="text-slate-400 hover:text-white transition-colors bg-slate-700/50 p-1.5 sm:p-2 rounded-full shrink-0">
-                                                <IconX />
-                                            </button>
+
+                                        {/* 2. 出力対象の選択 */}
+                                        <div className="flex flex-col gap-3">
+                                            <h4 className="font-bold text-slate-700 text-sm border-b border-slate-200 pb-1">2. 出力する生徒の範囲</h4>
+                                            <div className="flex flex-col gap-2">
+                                                <label className={`flex items-center gap-3 cursor-pointer p-2.5 border rounded-lg transition-colors ${printConfig.mode === 'all' ? 'bg-blue-50 border-blue-300' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
+                                                    <input type="radio" name="printMode" value="all" className="w-4 h-4" checked={printConfig.mode === 'all'} onChange={() => setPrintConfig({...printConfig, mode: 'all'})} />
+                                                    <span className="font-bold text-sm text-slate-700">表示中の全員 ({tableData.length}名)</span>
+                                                </label>
+                                                
+                                                <label className={`flex items-center gap-3 cursor-pointer p-2.5 border rounded-lg transition-colors ${printConfig.mode === 'class' ? 'bg-blue-50 border-blue-300' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
+                                                    <input type="radio" name="printMode" value="class" className="w-4 h-4" checked={printConfig.mode === 'class'} onChange={() => setPrintConfig({...printConfig, mode: 'class', targetClass: printConfig.targetClass || availableClasses[0]})} />
+                                                    <span className="font-bold text-sm text-slate-700">クラスで絞り込み</span>
+                                                </label>
+                                                
+                                                {/* クラス選択UI */}
+                                                {printConfig.mode === 'class' && (
+                                                    <div className="ml-8 flex flex-wrap gap-2">
+                                                        {availableClasses.map(c => (
+                                                            <button
+                                                                key={c}
+                                                                onClick={() => setPrintConfig({...printConfig, targetClass: c})}
+                                                                className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all ${printConfig.targetClass === c ? 'bg-blue-600 text-white shadow-md scale-105' : 'bg-white border border-slate-300 text-slate-600 hover:bg-slate-100'}`}
+                                                            >
+                                                                {c}組
+                                                            </button>
+                                                        ))}
+                                                        {availableClasses.length === 0 && <span className="text-sm text-slate-500">クラス情報がありません</span>}
+                                                    </div>
+                                                )}
+
+                                                <label className={`flex items-center gap-3 cursor-pointer p-2.5 border rounded-lg transition-colors ${printConfig.mode === 'individual' ? 'bg-blue-50 border-blue-300' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
+                                                    <input type="radio" name="printMode" value="individual" className="w-4 h-4" checked={printConfig.mode === 'individual'} onChange={() => setPrintConfig({...printConfig, mode: 'individual'})} />
+                                                    <span className="font-bold text-sm text-slate-700">生徒を個別に指定</span>
+                                                </label>
+
+                                                {/* 個人選択UI */}
+                                                {printConfig.mode === 'individual' && (
+                                                    <div className="ml-8 border border-slate-300 rounded-lg overflow-hidden bg-white shadow-inner">
+                                                        <div className="bg-slate-100 px-3 py-2 flex justify-between items-center border-b border-slate-300 text-xs">
+                                                            <span className="font-bold text-slate-700">{printConfig.selectedStudents.length}名 選択中</span>
+                                                            <div className="flex gap-3">
+                                                                <button onClick={() => setPrintConfig({...printConfig, selectedStudents: tableData.map(r=>r.studentId)})} className="text-blue-600 hover:text-blue-800 font-bold">全選択</button>
+                                                                <button onClick={() => setPrintConfig({...printConfig, selectedStudents: []})} className="text-slate-500 hover:text-slate-700 font-bold">全解除</button>
+                                                            </div>
+                                                        </div>
+                                                        <div className="max-h-48 overflow-y-auto p-2 flex flex-col gap-1">
+                                                            {tableData.map(r => (
+                                                                <label key={r.studentId} className="flex items-center gap-3 p-1.5 hover:bg-blue-50 rounded cursor-pointer transition-colors">
+                                                                    <input 
+                                                                        type="checkbox" 
+                                                                        className="w-4 h-4 text-blue-600 rounded border-slate-300"
+                                                                        checked={printConfig.selectedStudents.includes(r.studentId)}
+                                                                        onChange={(e) => {
+                                                                            const newSelected = e.target.checked 
+                                                                                ? [...printConfig.selectedStudents, r.studentId]
+                                                                                : printConfig.selectedStudents.filter(id => id !== r.studentId);
+                                                                            setPrintConfig({...printConfig, selectedStudents: newSelected});
+                                                                        }}
+                                                                    />
+                                                                    <span className="font-mono text-slate-400 text-xs">{r.grade}-{r.class}-{r.no.toString().padStart(2,'0')}</span>
+                                                                    <span className="font-bold text-slate-700 text-sm">{r.rawName}</span>
+                                                                </label>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
+                                    <div className="p-4 bg-white border-t border-slate-200 flex justify-end gap-3 shrink-0">
+                                        <button onClick={() => setIsPrintMenuOpen(false)} className="px-5 py-2.5 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">
+                                            キャンセル
+                                        </button>
+                                        <button 
+                                            onClick={executePrintFromSettings} 
+                                            className="px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg flex items-center gap-2 shadow-md transition-transform hover:scale-105"
+                                        >
+                                            <IconPrinter /> 出力プレビューを作成
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
-                                    {/* Modal Body (Comprehensive Report) */}
+                        {/* Student Detail Modal (Normal Screen UI) */}
+                    {selectedStudentId && studentDetail && (
+                        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-40 p-2 sm:p-4" onClick={() => setSelectedStudentId(null)}>
+                            <div 
+                                className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden" 
+                                onClick={e => e.stopPropagation()}
+                                onTouchStart={handleTouchStart}
+                                onTouchMove={handleTouchMove}
+                                onTouchEnd={handleTouchEnd}
+                            >
+                                {/* Modal Header */}
+                                <div className="bg-slate-800 text-white px-4 py-3 sm:px-6 sm:py-4 flex justify-between items-center shrink-0">
+                                    <div className="flex items-center gap-1 sm:gap-2">
+                                        <button 
+                                            onClick={() => handleNavigateStudent('prev')} 
+                                            className={`p-1 sm:p-2 rounded-full transition-colors shrink-0 ${tableData.findIndex(r => r.studentId === selectedStudentId) > 0 ? 'text-slate-300 hover:text-white hover:bg-slate-700/50' : 'text-slate-600 cursor-not-allowed'}`}
+                                            disabled={tableData.findIndex(r => r.studentId === selectedStudentId) <= 0}
+                                            title="前の生徒 (←)"
+                                        >
+                                            <IconChevronLeft />
+                                        </button>
+
+                                        <div className="flex items-center gap-3 sm:gap-4 mx-1 sm:mx-2 w-48 sm:w-72">
+                                            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-500 rounded-full flex items-center justify-center text-lg sm:text-xl font-bold shadow-inner shrink-0">
+                                                {studentDetail.rawName.charAt(0)}
+                                            </div>
+                                            <div className="overflow-hidden">
+                                                <div className="flex items-center gap-2 mb-0.5 sm:mb-1">
+                                                    <span className="text-[10px] text-slate-400 font-mono shrink-0 bg-slate-700 px-1.5 py-0.5 rounded">
+                                                        {tableData.findIndex(r => r.studentId === selectedStudentId) + 1} / {tableData.length}
+                                                    </span>
+                                                </div>
+                                                <h2 className="text-xl sm:text-2xl font-bold leading-none truncate">{studentDetail.rawName}</h2>
+                                            </div>
+                                        </div>
+
+                                        <button 
+                                            onClick={() => handleNavigateStudent('next')} 
+                                            className={`p-1 sm:p-2 rounded-full transition-colors shrink-0 ${tableData.findIndex(r => r.studentId === selectedStudentId) < tableData.length - 1 ? 'text-slate-300 hover:text-white hover:bg-slate-700/50' : 'text-slate-600 cursor-not-allowed'}`}
+                                            disabled={tableData.findIndex(r => r.studentId === selectedStudentId) >= tableData.length - 1}
+                                            title="次の生徒 (→)"
+                                        >
+                                            <IconChevronRight />
+                                        </button>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <button 
+                                            onClick={() => {
+                                                // 個人の場合は現在の全種別を出力する
+                                                triggerPrint([selectedStudentId], { regular: true, benesse: true, comprehensive: true });
+                                            }}
+                                            className="hidden sm:flex text-xs bg-slate-700 hover:bg-slate-600 text-white font-bold py-1.5 px-3 rounded border border-slate-600 items-center gap-1 shadow-sm transition-colors"
+                                        >
+                                            <IconPrinter /> この生徒をPDF出力
+                                        </button>
+                                        <button onClick={() => setSelectedStudentId(null)} className="text-slate-400 hover:text-white transition-colors bg-slate-700/50 p-1.5 sm:p-2 rounded-full shrink-0">
+                                            <IconX />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Modal Body */}
                                     <div className="p-4 sm:p-6 overflow-y-auto bg-slate-50 flex-1">
-                                        {comprehensiveReportData.length === 0 ? (
+                                        {studentDetail.history.length === 0 ? (
                                             <div className="text-center text-slate-500 py-10">データがありません</div>
                                         ) : (
-                                            comprehensiveReportData.map(section => (
+                                            getComprehensiveStudentReport(selectedStudentId).map(section => (
                                                 <ReportSection key={section.type} section={section} isPrint={false} />
                                             ))
                                         )}
@@ -1569,28 +1776,33 @@
                         )}
                     </div>
 
-                    {/* --- STREAMING_CHUNK:Print Only Template... --- */}
+                    {/* --- PRINT ONLY TEMPLATE (Hides during normal viewing) --- */}
                     <div className="print-only">
-                        {isPrinting && (printTargetId === 'ALL' ? tableData.map(row => row.studentId) : [printTargetId]).map((targetStudentId) => {
+                        {isPrinting && printTargetIds.map((targetStudentId) => {
                             const detailData = getComprehensiveStudentReport(targetStudentId);
                             if (!detailData || detailData.length === 0) return null;
-                            const studentName = detailData[0].rawName;
+                            
+                            // 選択された試験種別だけをフィルター
+                            const filteredData = detailData.filter(section => printTargetTypes[section.type]);
+                            if (filteredData.length === 0) return null;
+
+                            const studentName = filteredData[0].rawName; // Or get from records
                             
                             return (
                                 <div key={targetStudentId} className="page-break" style={{ padding: '0 10px', width: '100%', boxSizing: 'border-box' }}>
                                     {/* Header */}
-                                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '24px', borderBottom: '2px solid #1e293b', paddingBottom: '12px' }}>
-                                        <div style={{ width: '40px', height: '40px', backgroundColor: '#3b82f6', borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '20px', marginRight: '16px', WebkitPrintColorAdjust: 'exact' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px', borderBottom: '2px solid #1e293b', paddingBottom: '8px' }}>
+                                        <div style={{ width: '36px', height: '36px', backgroundColor: '#3b82f6', borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '18px', marginRight: '12px', WebkitPrintColorAdjust: 'exact' }}>
                                             {studentName.charAt(0)}
                                         </div>
-                                        <h2 style={{ fontSize: '28px', fontWeight: 'bold', margin: 0, color: '#0f172a' }}>
+                                        <h2 style={{ fontSize: '24px', fontWeight: 'bold', margin: 0, color: '#0f172a' }}>
                                             {studentName}
-                                            <span style={{ fontSize: '14px', fontWeight: 'normal', color: '#64748b', marginLeft: '16px' }}>個人成績 統合レポート</span>
+                                            <span style={{ fontSize: '12px', fontWeight: 'normal', color: '#64748b', marginLeft: '12px' }}>個人成績 統合レポート</span>
                                         </h2>
                                     </div>
 
                                     {/* Sections */}
-                                    {detailData.map(section => (
+                                    {filteredData.map(section => (
                                         <ReportSection key={section.type} section={section} isPrint={true} />
                                     ))}
                                 </div>
