@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BLEND 成績推移トラッカー v3.7</title>
+    <title>BLEND 成績推移トラッカー v3.8</title>
     <!-- React & Babelのバージョンを安定版に固定 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
@@ -38,7 +38,7 @@
             .print-only { display: none !important; }
         }
         @media print {
-            @page { size: A4 portrait; margin: 10mm; }
+            @page { size: A4 portrait; margin: 8mm 10mm; }
             body { 
                 background-color: white !important; 
                 margin: 0; padding: 0; 
@@ -48,12 +48,19 @@
             }
             .no-print { display: none !important; }
             .print-only { display: block !important; }
-            .page-break { page-break-after: always; break-after: page; }
             
-            /* 要素の途中で改ページされるのを防ぐ設定 */
-            .avoid-break { 
-                page-break-inside: avoid !important; 
-                break-inside: avoid !important; 
+            /* 1ページ単位の厳密なシート制御 */
+            .print-sheet {
+                width: 100% !important;
+                box-sizing: border-box !important;
+                page-break-after: always !important;
+                break-after: page !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+            }
+            .print-sheet:last-child {
+                page-break-after: auto !important;
+                break-after: auto !important;
             }
             
             /* 印刷時はスクロールバー非表示 */
@@ -72,25 +79,15 @@
                 padding-left: 2px !important;
                 padding-right: 2px !important;
             }
-            .report-table th {
-                font-size: 9px !important; /* カラム名が長いので縮小 */
-                line-height: 1.2 !important;
-            }
-            .report-table td {
-                font-size: 11px !important;
-            }
-            .report-table .diff-text {
-                font-size: 9px !important;
-            }
             /* 最初の数列表の幅比率を調整 */
-            .report-table th:nth-child(1), .report-table td:nth-child(1) { width: 16% !important; }
-            .report-table th:nth-child(2), .report-table td:nth-child(2) { width: 12% !important; }
+            .report-table th:nth-child(1), .report-table td:nth-child(1) { width: 15% !important; }
+            .report-table th:nth-child(2), .report-table td:nth-child(2) { width: 11% !important; }
             .report-table th:nth-child(3), .report-table td:nth-child(3) { width: 4% !important; }
 
             /* ★ 印刷時、統計サマリーカードを5列で鮮明に表示するスタイル */
             .stat-card-grid {
                 grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
-                gap: 6px !important;
+                gap: 5px !important;
             }
         }
     </style>
@@ -172,21 +169,25 @@
         };
 
         // 折れ線グラフ＆教科切り替えコンポーネント
-        const SubjectLineChart = ({ history, chartSubjects, isDeviation }) => {
-            // デフォルトでは平均点（3教科偏差値）の黒いグラフのみを選択状態にする
+        const SubjectLineChart = ({ history, chartSubjects, isDeviation, forceAllSubjects = false, isPrint = false, customSvgHeight = null }) => {
+            // デフォルトでは平均点（3教科偏差値）の黒いグラフのみを選択状態にする（forceAllSubjects時は全教科）
             const getDefaultSelectedSubs = (subjects) => {
+                if (forceAllSubjects) return subjects;
                 const avgSubs = subjects.filter(s => SUBJECT_CHART_CONFIG[s] && SUBJECT_CHART_CONFIG[s].isAvg);
                 return avgSubs.length > 0 ? avgSubs : subjects;
             };
 
             const [selectedSubs, setSelectedSubs] = useState(() => getDefaultSelectedSubs(chartSubjects));
 
-            // 表示対象の科目リストが変化した際にデフォルト選択状態（平均のみ）に同期
+            // 表示対象の科目リストが変化した際にデフォルト選択状態に同期
             useEffect(() => {
                 setSelectedSubs(getDefaultSelectedSubs(chartSubjects));
-            }, [chartSubjects.join(',')]);
+            }, [chartSubjects.join(','), forceAllSubjects]);
+
+            const activeSubs = forceAllSubjects ? chartSubjects : selectedSubs;
 
             const toggleSubject = (sub) => {
+                if (forceAllSubjects) return;
                 if (selectedSubs.includes(sub)) {
                     setSelectedSubs(selectedSubs.filter(s => s !== sub));
                 } else {
@@ -263,11 +264,11 @@
             const isVeryMany = count >= 13;
 
             const svgWidth = 780;
-            const svgHeight = isVeryMany ? 295 : 280;
+            const svgHeight = customSvgHeight || (isVeryMany ? 295 : 280);
             const padLeft = 44;
             const padRight = 24;
-            const padTop = 28;
-            const padBottom = isVeryMany ? 64 : 52;
+            const padTop = 26;
+            const padBottom = isVeryMany ? 60 : 48;
             const plotW = svgWidth - padLeft - padRight;
             const plotH = svgHeight - padTop - padBottom;
 
@@ -298,23 +299,52 @@
                 return [...normal, ...avgs];
             }, [chartSubjects]);
 
+            // 複数教科を同時表示した際、同じ試験列で数値ラベルが重ならないようにY座標を微調整するマップ
+            const labelOffsetMap = useMemo(() => {
+                const map = {};
+                history.forEach((h, colIdx) => {
+                    const colPoints = [];
+                    orderedSubjects.forEach(sub => {
+                        if (!activeSubs.includes(sub)) return;
+                        const val = getPointValue(h.record, sub);
+                        if (val !== null) {
+                            colPoints.push({ sub, y: getY(val), val });
+                        }
+                    });
+                    // Y座標（上から下）の順でソートし、近접しているラベルを上下にずらす
+                    colPoints.sort((a, b) => a.y - b.y);
+                    let lastLabelY = -999;
+                    colPoints.forEach((pt) => {
+                        let desiredY = pt.y - 8;
+                        if (desiredY - lastLabelY < 10) {
+                            desiredY = lastLabelY + 10;
+                        }
+                        // 下端・上端からはみ出さないように制限
+                        desiredY = Math.max(12, Math.min(svgHeight - padBottom - 4, desiredY));
+                        map[`${pt.sub}_${colIdx}`] = desiredY;
+                        lastLabelY = desiredY;
+                    });
+                });
+                return map;
+            }, [history, orderedSubjects, activeSubs, minY, maxY, svgHeight, padBottom]);
+
             return (
-                <div className="bg-slate-50/80 border-t border-slate-200 p-3 sm:p-4 transition-all" onClick={e => e.stopPropagation()}>
+                <div className={`${isPrint ? 'bg-white p-2' : 'bg-slate-50/80 border-t border-slate-200 p-3 sm:p-4'} transition-all`} onClick={e => e.stopPropagation()}>
                     {/* コントロールバー（教科ボタン＋一括切替） */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                         <div className="flex flex-wrap items-center gap-1.5">
                             <span className="text-[11px] font-bold text-slate-500 mr-1">表示教科:</span>
                             {chartSubjects.map(sub => {
                                 const cfg = SUBJECT_CHART_CONFIG[sub] || { color: '#64748b', bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-300', label: sub };
-                                const isActive = selectedSubs.includes(sub);
+                                const isActive = activeSubs.includes(sub);
                                 return (
                                     <button
                                         key={sub}
                                         type="button"
                                         onClick={() => toggleSubject(sub)}
-                                        className={`px-2.5 py-1 rounded-full text-xs font-bold border flex items-center gap-1.5 transition-all shadow-sm ${
+                                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border flex items-center gap-1.5 transition-all ${
                                             isActive
-                                                ? `${cfg.bg} ${cfg.text} ${cfg.border} ring-1 ring-current/20 scale-100`
+                                                ? `${cfg.bg} ${cfg.text} ${cfg.border} shadow-sm`
                                                 : 'bg-white text-slate-400 border-slate-200 opacity-60 hover:opacity-90'
                                         }`}
                                     >
@@ -332,35 +362,37 @@
                         </div>
 
                         {/* クイック切替ボタン */}
-                        <div className="flex items-center gap-1.5 ml-auto no-print">
-                            <button
-                                type="button"
-                                onClick={() => setSelectedSubs(chartSubjects)}
-                                className="text-[11px] px-2 py-1 rounded bg-white border border-slate-300 text-slate-600 hover:bg-slate-100 font-medium transition-colors"
-                            >
-                                すべて表示
-                            </button>
-                            {chartSubjects.some(s => SUBJECT_CHART_CONFIG[s] && SUBJECT_CHART_CONFIG[s].isAvg) && (
+                        {!isPrint && (
+                            <div className="flex items-center gap-1.5 ml-auto no-print">
                                 <button
                                     type="button"
-                                    onClick={() => setSelectedSubs(chartSubjects.filter(s => SUBJECT_CHART_CONFIG[s] && SUBJECT_CHART_CONFIG[s].isAvg))}
+                                    onClick={() => setSelectedSubs(chartSubjects)}
                                     className="text-[11px] px-2 py-1 rounded bg-white border border-slate-300 text-slate-600 hover:bg-slate-100 font-medium transition-colors"
                                 >
-                                    {isDeviation ? '3教科のみ' : '平均点のみ'}
+                                    すべて表示
                                 </button>
-                            )}
-                            <button
-                                type="button"
-                                onClick={() => setSelectedSubs([])}
-                                className="text-[11px] px-2 py-1 rounded bg-white border border-slate-300 text-slate-500 hover:bg-slate-100 font-medium transition-colors"
-                            >
-                                全解除
-                            </button>
-                        </div>
+                                {chartSubjects.some(s => SUBJECT_CHART_CONFIG[s] && SUBJECT_CHART_CONFIG[s].isAvg) && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedSubs(chartSubjects.filter(s => SUBJECT_CHART_CONFIG[s] && SUBJECT_CHART_CONFIG[s].isAvg))}
+                                        className="text-[11px] px-2 py-1 rounded bg-white border border-slate-300 text-slate-600 hover:bg-slate-100 font-medium transition-colors"
+                                    >
+                                        {isDeviation ? '3教科のみ' : '平均点のみ'}
+                                    </button>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedSubs([])}
+                                    className="text-[11px] px-2 py-1 rounded bg-white border border-slate-300 text-slate-500 hover:bg-slate-100 font-medium transition-colors"
+                                >
+                                    全解除
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     {/* SVG 折れ線グラフ */}
-                    <div className="bg-white rounded-lg border border-slate-200 p-2 shadow-inner overflow-x-auto">
+                    <div className="bg-white rounded-lg border border-slate-200 p-1.5 shadow-inner overflow-x-auto">
                         <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full h-auto min-w-[480px] select-none">
                             {/* 横グリッド線とY軸ラベル */}
                             {ticks.map(t => {
@@ -397,7 +429,7 @@
                                 const { top, bottom } = formatExamLabel(h.examName);
                                 const labelFontSize = isVeryMany ? '9.5' : (isMany ? '10' : '11');
                                 const subFontSize = isVeryMany ? '8.5' : '9.5';
-                                const baseY = svgHeight - padBottom + 16;
+                                const baseY = svgHeight - padBottom + 15;
 
                                 return (
                                     <g key={h.examId}>
@@ -438,7 +470,7 @@
                                                 </text>
                                                 <text
                                                     x={x}
-                                                    y={baseY + 14}
+                                                    y={baseY + 13}
                                                     textAnchor="middle"
                                                     fontSize={labelFontSize}
                                                     fontWeight="bold"
@@ -467,20 +499,20 @@
 
                             {/* 各科目の折れ線・ポイント・数値ラベル */}
                             {orderedSubjects.map(sub => {
-                                if (!selectedSubs.includes(sub)) return null;
+                                if (!activeSubs.includes(sub)) return null;
                                 const cfg = SUBJECT_CHART_CONFIG[sub] || { color: '#64748b', isAvg: false };
                                 const points = [];
                                 history.forEach((h, i) => {
                                     const val = getPointValue(h.record, sub);
                                     if (val !== null) {
-                                        points.push({ x: getX(i), y: getY(val), val, examName: h.examName });
+                                        points.push({ x: getX(i), y: getY(val), val, examName: h.examName, colIdx: i });
                                     }
                                 });
                                 if (points.length === 0) return null;
 
                                 const pathData = points.map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
                                 const dotRadius = isVeryMany ? (cfg.isAvg ? '4.5' : '3.8') : (cfg.isAvg ? '5.5' : '4.5');
-                                const numFontSize = isVeryMany ? (cfg.isAvg ? '10' : '9.5') : (cfg.isAvg ? '11.5' : '10.5');
+                                const numFontSize = isVeryMany ? (cfg.isAvg ? '9.5' : '9') : (cfg.isAvg ? '11' : '10');
 
                                 return (
                                     <g key={sub}>
@@ -489,38 +521,41 @@
                                                 d={pathData}
                                                 fill="none"
                                                 stroke={cfg.color}
-                                                strokeWidth={cfg.isAvg ? '3.5' : '2.5'}
+                                                strokeWidth={cfg.isAvg ? '3.5' : '2.2'}
                                                 strokeDasharray={cfg.isAvg ? '6 4' : 'none'}
                                                 strokeLinecap="round"
                                                 strokeLinejoin="round"
                                             />
                                         )}
-                                        {points.map((p, idx) => (
-                                            <g key={idx}>
-                                                <circle
-                                                    cx={p.x}
-                                                    cy={p.y}
-                                                    r={dotRadius}
-                                                    fill={cfg.color}
-                                                    stroke="#ffffff"
-                                                    strokeWidth="2"
-                                                />
-                                                <text
-                                                    x={p.x}
-                                                    y={p.y - 9}
-                                                    textAnchor="middle"
-                                                    fontSize={numFontSize}
-                                                    fontWeight="bold"
-                                                    fill={cfg.color}
-                                                    stroke="#ffffff"
-                                                    strokeWidth="3.5"
-                                                    strokeLinejoin="round"
-                                                    style={{ paintOrder: 'stroke' }}
-                                                >
-                                                    {formatScore(p.val, sub)}
-                                                </text>
-                                            </g>
-                                        ))}
+                                        {points.map((p, idx) => {
+                                            const labelY = labelOffsetMap[`${sub}_${p.colIdx}`] !== undefined ? labelOffsetMap[`${sub}_${p.colIdx}`] : (p.y - 8);
+                                            return (
+                                                <g key={idx}>
+                                                    <circle
+                                                        cx={p.x}
+                                                        cy={p.y}
+                                                        r={dotRadius}
+                                                        fill={cfg.color}
+                                                        stroke="#ffffff"
+                                                        strokeWidth="1.8"
+                                                    />
+                                                    <text
+                                                        x={p.x}
+                                                        y={labelY}
+                                                        textAnchor="middle"
+                                                        fontSize={numFontSize}
+                                                        fontWeight="bold"
+                                                        fill={cfg.color}
+                                                        stroke="#ffffff"
+                                                        strokeWidth="3.2"
+                                                        strokeLinejoin="round"
+                                                        style={{ paintOrder: 'stroke' }}
+                                                    >
+                                                        {formatScore(p.val, sub)}
+                                                    </text>
+                                                </g>
+                                            );
+                                        })}
                                     </g>
                                 );
                             })}
@@ -530,43 +565,55 @@
             );
         };
 
+        // 特定セクション・テーブル種別からグラフ対象科目を抽出するヘルパー
+        const getChartSubjectsForTable = (sectionType, subjects, tableType) => {
+            if (!subjects || subjects.length === 0) return [];
+            if (sectionType === 'benesse') {
+                const targets = ['国語偏差値', '数学偏差値', '英語偏差値', '3教科偏差値'];
+                return targets.filter(t => subjects.includes(t));
+            }
+            if (tableType === 'main') {
+                const base = ['国語', '社会', '数学', '理科', '英語'].filter(t => subjects.includes(t));
+                if (subjects.includes('5教科平均点') || base.length === 5) {
+                    base.push('5教科平均点');
+                }
+                return base;
+            }
+            if (tableType === 'sub') {
+                const base = ['音楽', '美術', '保体', '技家'].filter(t => subjects.includes(t));
+                if (subjects.includes('9教科平均点')) {
+                    base.push('9教科平均点');
+                }
+                return base;
+            }
+            return [];
+        };
+
         // 表と折れ線グラフを連動させるラッパーコンポーネント
-        const InteractiveReportTable = ({ section, subjects, titleSuffix, tableType, isPrint, renderDiffText }) => {
-            // デフォルトでグラフを表示状態にする
+        const InteractiveReportTable = ({ section, subjects, titleSuffix, tableType, isPrint, compactLevel = 'normal', renderDiffText }) => {
+            // デフォルトでグラフを表示状態にする（画面表示時）
             const [isChartOpen, setIsChartOpen] = useState(true);
 
             // この表に対応するグラフ対象科目を決定
             const chartSubjects = useMemo(() => {
-                if (!subjects || subjects.length === 0) return [];
-                if (section.type === 'benesse') {
-                    const targets = ['国語偏差値', '数学偏差値', '英語偏差値', '3教科偏差値'];
-                    return targets.filter(t => subjects.includes(t));
-                }
-                if (tableType === 'main') {
-                    const base = ['国語', '社会', '数学', '理科', '英語'].filter(t => subjects.includes(t));
-                    if (subjects.includes('5教科平均点') || base.length === 5) {
-                        base.push('5教科平均点');
-                    }
-                    return base;
-                }
-                if (tableType === 'sub') {
-                    const base = ['音楽', '美術', '保体', '技家'].filter(t => subjects.includes(t));
-                    if (subjects.includes('9教科平均点')) {
-                        base.push('9教科平均点');
-                    }
-                    return base;
-                }
-                return [];
+                return getChartSubjectsForTable(section.type, subjects, tableType);
             }, [section.type, subjects, tableType]);
 
             if (!subjects || subjects.length === 0) return null;
 
+            const isUltraCompact = compactLevel === 'ultra';
+            const isCompact = compactLevel === 'compact' || isUltraCompact;
+            const cellPy = isUltraCompact ? 'py-0.5' : (isCompact ? 'py-1' : 'py-2');
+            const headerPy = isUltraCompact ? 'py-1' : (isCompact ? 'py-1.5' : 'py-2');
+            const scoreTextSize = isUltraCompact ? 'text-[11px]' : (isCompact ? 'text-[12px]' : 'text-[13px]');
+            const diffTextSize = isUltraCompact ? 'text-[8.5px]' : (isCompact ? 'text-[9px]' : 'text-[10px]');
+
             return (
-                <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden relative z-0 mb-4 avoid-break">
+                <div className={`bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden relative z-0 ${isPrint ? 'mb-2' : 'mb-4'}`}>
                     {/* テーブル上部バー（タップ案内） */}
                     <div
                         onClick={() => !isPrint && chartSubjects.length > 0 && setIsChartOpen(!isChartOpen)}
-                        className={`px-3 py-1.5 border-b border-slate-200 flex justify-between items-center transition-colors ${
+                        className={`px-3 ${isCompact ? 'py-1' : 'py-1.5'} border-b border-slate-200 flex justify-between items-center transition-colors ${
                             !isPrint && chartSubjects.length > 0 ? 'bg-slate-50 hover:bg-blue-50/60 cursor-pointer' : 'bg-slate-50'
                         }`}
                     >
@@ -591,11 +638,11 @@
                         <table className="report-table w-full text-[12px] text-center whitespace-nowrap border-separate border-spacing-0">
                             <thead className="bg-slate-100 text-slate-600 uppercase">
                                 <tr>
-                                    <th className="px-2 py-2 font-medium text-left sticky left-0 top-0 bg-slate-100 z-30 border-b border-slate-200 min-w-[120px] w-[120px]">試験名</th>
-                                    <th className="px-2 py-2 font-medium sticky top-0 bg-slate-100 z-20 border-b border-slate-200 min-w-[80px] w-[80px]">クラス/番号</th>
-                                    <th className="px-1 py-2 font-medium sticky top-0 bg-slate-100 z-20 border-b border-slate-200 min-w-[30px] w-[30px]">奨</th>
+                                    <th className={`px-2 ${headerPy} font-medium text-left sticky left-0 top-0 bg-slate-100 z-30 border-b border-slate-200 min-w-[120px] w-[120px]`}>試験名</th>
+                                    <th className={`px-2 ${headerPy} font-medium sticky top-0 bg-slate-100 z-20 border-b border-slate-200 min-w-[80px] w-[80px]`}>クラス/番号</th>
+                                    <th className={`px-1 ${headerPy} font-medium sticky top-0 bg-slate-100 z-20 border-b border-slate-200 min-w-[30px] w-[30px]`}>奨</th>
                                     {subjects.map(sub => (
-                                        <th key={sub} className="px-1 py-2 font-medium sticky top-0 bg-slate-100 z-20 border-b border-slate-200 min-w-[76px] w-[76px]">{sub}</th>
+                                        <th key={sub} className={`px-1 ${headerPy} font-medium sticky top-0 bg-slate-100 z-20 border-b border-slate-200 min-w-[76px] w-[76px]`}>{sub}</th>
                                     ))}
                                 </tr>
                             </thead>
@@ -604,8 +651,8 @@
                                     if (!h.record) {
                                         return (
                                             <tr key={h.examId} className="bg-slate-50/50">
-                                                <td className="px-2 py-2 text-left font-medium text-slate-500 sticky left-0 bg-slate-50/90 z-20 min-w-[120px]">{h.examName}</td>
-                                                <td colSpan={subjects.length + 2} className="px-2 py-2 text-slate-400 italic">データなし</td>
+                                                <td className={`px-2 ${cellPy} text-left font-medium text-slate-500 sticky left-0 bg-slate-50/90 z-20 min-w-[120px]`}>{h.examName}</td>
+                                                <td colSpan={subjects.length + 2} className={`px-2 ${cellPy} text-slate-400 italic`}>データなし</td>
                                             </tr>
                                         );
                                     }
@@ -613,13 +660,13 @@
                                     const prevRecord = i > 0 ? section.history[i - 1].record : null;
                                     return (
                                         <tr key={h.examId} className="hover:bg-blue-50/60 transition-colors">
-                                            <td className="px-2 py-2 text-left font-bold text-slate-700 sticky left-0 bg-white z-20 shadow-[2px_0_5px_rgba(0,0,0,0.02)] border-b border-slate-50 min-w-[120px] truncate">
+                                            <td className={`px-2 ${cellPy} text-left font-bold text-slate-700 sticky left-0 bg-white z-20 shadow-[2px_0_5px_rgba(0,0,0,0.02)] border-b border-slate-50 min-w-[120px] truncate`}>
                                                 {h.examName}
                                             </td>
-                                            <td className={`px-2 py-2 font-mono text-[10px] sm:text-[11px] bg-white border-b border-slate-50 z-10 min-w-[80px] ${h.record.class === 'A' ? 'text-red-600 font-bold' : h.record.class === 'B' ? 'text-blue-600 font-bold' : 'text-slate-500'}`}>
+                                            <td className={`px-2 ${cellPy} font-mono text-[10px] sm:text-[11px] bg-white border-b border-slate-50 z-10 min-w-[80px] ${h.record.class === 'A' ? 'text-red-600 font-bold' : h.record.class === 'B' ? 'text-blue-600 font-bold' : 'text-slate-500'}`}>
                                                 {h.record.grade}-{h.record.class}-{h.record.no.toString().padStart(2, '0')}
                                             </td>
-                                            <td className="px-1 py-2 text-center text-[11px] font-bold bg-white border-b border-slate-50 border-r z-10 min-w-[30px]">
+                                            <td className={`px-1 ${cellPy} text-center text-[11px] font-bold bg-white border-b border-slate-50 border-r z-10 min-w-[30px]`}>
                                                 {h.record.scholarship && <span className="text-amber-600">{h.record.scholarship.replace('学生', '')}</span>}
                                             </td>
                                             {subjects.map(sub => {
@@ -628,13 +675,13 @@
                                                 const diff = (score !== undefined && prevScore !== undefined) ? score - prevScore : undefined;
 
                                                 return (
-                                                    <td key={sub} className="px-1 py-2 border-l border-slate-50 bg-white border-b z-10 min-w-[76px]">
-                                                        <div className="flex flex-col items-center justify-center">
-                                                            <span className={`inline-block w-10 text-center py-0.5 rounded font-bold text-[13px] ${getScoreColor(score, sub)}`}>
+                                                    <td key={sub} className={`px-1 ${cellPy} border-l border-slate-50 bg-white border-b z-10 min-w-[76px]`}>
+                                                        <div className="flex flex-col items-center justify-center leading-tight">
+                                                            <span className={`inline-block w-10 text-center rounded font-bold ${scoreTextSize} ${getScoreColor(score, sub)}`}>
                                                                 {formatScore(score, sub)}
                                                             </span>
-                                                            <div className="h-3 mt-0.5 flex justify-center">
-                                                                {diff !== undefined && renderDiffText(diff, sub, 'diff-text text-[10px]')}
+                                                            <div className={`${isUltraCompact ? 'h-2.5' : 'h-3'} flex justify-center items-center`}>
+                                                                {diff !== undefined && renderDiffText(diff, sub, `diff-text ${diffTextSize}`)}
                                                             </div>
                                                         </div>
                                                     </td>
@@ -647,8 +694,8 @@
                         </table>
                     </div>
 
-                    {/* 折れ線グラフ表示エリア */}
-                    {isChartOpen && chartSubjects.length > 0 && (
+                    {/* 折れ線グラフ表示エリア（画面表示時のみここに出力。印刷時は2ページ目に分離） */}
+                    {!isPrint && isChartOpen && chartSubjects.length > 0 && (
                         <SubjectLineChart
                             history={section.history}
                             chartSubjects={chartSubjects}
@@ -695,16 +742,16 @@
 
             // スワイプ用のRef
             const touchStartX = useRef(null);
-            const touchEndX = useRef(null);
-
-            // Print State (v3.3)
+            // Print State (v3.8)
             const [isPrinting, setIsPrinting] = useState(false);
             const [printTargetIds, setPrintTargetIds] = useState([]); 
             const [printTargetTypes, setPrintTargetTypes] = useState({ regular: true, benesse: true, comprehensive: true });
+            const [printIncludeCharts, setPrintIncludeCharts] = useState(false);
             
             const [isPrintMenuOpen, setIsPrintMenuOpen] = useState(false);
             const [printConfig, setPrintConfig] = useState({
                 types: { regular: true, benesse: true, comprehensive: true },
+                includeCharts: false, // false = 1枚(表のみ), true = 2枚(2ページ目に全教科グラフ)
                 mode: 'all', // 'all', 'class', 'individual'
                 targetClass: '',
                 selectedStudents: []
@@ -1517,16 +1564,17 @@
             };
 
             // --- Print PDF Handler ---
-            const triggerPrint = (targetIds, typesConfig) => {
+            const triggerPrint = (targetIds, typesConfig, includeChartsFlag = false) => {
                 setPrintTargetIds(targetIds);
                 setPrintTargetTypes(typesConfig);
+                setPrintIncludeCharts(includeChartsFlag);
                 setIsPrinting(true);
                 setTimeout(() => {
                     if(targetIds.length > 1) alert("印刷プレビューが開きます。\n「送信先（プリンター）」を「PDFに保存」にして保存してください。");
                     window.print();
                     setIsPrinting(false);
                     setPrintTargetIds([]);
-                }, 800);
+                }, 600);
             };
 
             const executePrintFromSettings = () => {
@@ -1550,7 +1598,7 @@
                 }
 
                 setIsPrintMenuOpen(false);
-                triggerPrint(targets, printConfig.types);
+                triggerPrint(targets, printConfig.types, printConfig.includeCharts);
             };
 
 
@@ -1588,26 +1636,29 @@
             }
 
             // --- Report Section Component (Reusable) ---
-            const ReportSection = ({ section, isPrint }) => {
+            const ReportSection = ({ section, isPrint, compactLevel = 'normal' }) => {
                 if (!section) return null;
 
+                const isUltraCompact = compactLevel === 'ultra';
+                const isCompact = compactLevel === 'compact' || isUltraCompact;
+
                 return (
-                    <div className="mb-8 relative pl-4 border-l-2 border-slate-200 avoid-break">
-                        <div className={`absolute -left-[11px] top-0 w-5 h-5 rounded-full ${section.colorClass} border-4 border-white flex items-center justify-center`}></div>
+                    <div className={`${isPrint ? (isCompact ? 'mb-2.5' : 'mb-4') : 'mb-8'} relative pl-3 sm:pl-4 border-l-2 border-slate-200`}>
+                        <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full ${section.colorClass} border-2 border-white flex items-center justify-center`}></div>
                         
-                        <div className="flex flex-wrap items-baseline justify-between gap-2 mb-2.5 avoid-break">
-                            <h3 className={`text-base sm:text-lg font-bold ${section.titleColor} flex items-center gap-2`}>
+                        <div className={`flex flex-wrap items-baseline justify-between gap-2 ${isCompact ? 'mb-1.5' : 'mb-2.5'}`}>
+                            <h3 className={`${isCompact ? 'text-sm' : 'text-base sm:text-lg'} font-bold ${section.titleColor} flex items-center gap-2`}>
                                 {section.title}
-                                <span className="text-xs font-bold text-slate-600 bg-slate-200/80 px-2.5 py-0.5 rounded-full">
+                                <span className="text-[11px] font-bold text-slate-600 bg-slate-200/80 px-2 py-0.5 rounded-full">
                                     全{section.history.filter(h=>h.record).length}回分の個人推移
                                 </span>
                             </h3>
-                            <span className="text-[11px] sm:text-xs font-bold text-slate-600 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded">
+                            <span className="text-[10px] sm:text-xs font-bold text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded">
                                 📊 各枠はこれまでの自分の<span className="text-slate-900 underline mx-0.5">過去平均</span>・<span className="text-red-700 mx-0.5">最高</span>・<span className="text-blue-700 mx-0.5">最低</span>の記録
                             </span>
                         </div>
                         
-                        <div className="stat-card-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 mb-4 avoid-break">
+                        <div className={`stat-card-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 ${isCompact ? 'gap-1.5 mb-2' : 'gap-2.5 mb-3'}`}>
                             {[...section.mainSubjects, ...section.subSubjects].map(sub => {
                                 const stat = section.stats[sub];
                                 if (!stat) return null;
@@ -1617,24 +1668,24 @@
                                 const displayMin = isFloat ? Number(stat.min).toFixed(1) : Math.round(stat.min).toString();
 
                                 return (
-                                    <div key={sub} className="p-2.5 rounded-lg border border-slate-300 shadow-sm flex flex-col justify-between bg-white">
-                                        <div className="text-xs sm:text-[13px] font-extrabold text-slate-800 mb-1.5 border-b border-slate-200 pb-1 truncate" title={sub}>
+                                    <div key={sub} className={`${isCompact ? 'p-1.5' : 'p-2.5'} rounded-lg border border-slate-300 shadow-sm flex flex-col justify-between bg-white`}>
+                                        <div className={`${isCompact ? 'text-[11px] mb-0.5 pb-0.5' : 'text-xs sm:text-[13px] mb-1 pb-1'} font-extrabold text-slate-800 border-b border-slate-200 truncate`} title={sub}>
                                             {sub}
                                         </div>
-                                        <div className="flex justify-between items-baseline my-1 px-0.5">
-                                            <span className="text-[11px] font-bold text-slate-600">過去平均</span>
-                                            <span className={`text-lg sm:text-xl font-extrabold leading-none ${section.titleColor}`}>
+                                        <div className="flex justify-between items-baseline my-0.5 px-0.5">
+                                            <span className="text-[10px] font-bold text-slate-600 whitespace-nowrap">過去平均</span>
+                                            <span className={`${isCompact ? 'text-base' : 'text-lg sm:text-xl'} font-extrabold leading-none ${section.titleColor}`}>
                                                 {displayAvg}
                                             </span>
                                         </div>
-                                        <div className="grid grid-cols-2 gap-1.5 mt-1.5 pt-1.5 border-t border-slate-100">
-                                            <div className="bg-red-50 border border-red-200/80 px-1.5 py-1 rounded flex items-baseline justify-between">
-                                                <span className="text-[10px] sm:text-[11px] font-bold text-red-700">最高</span>
-                                                <span className="text-xs sm:text-[13px] font-extrabold text-red-700">{displayMax}</span>
+                                        <div className={`grid grid-cols-2 gap-1 ${isCompact ? 'mt-1 pt-1' : 'mt-1.5 pt-1.5'} border-t border-slate-100`}>
+                                            <div className="bg-red-50 border border-red-200/80 px-1 py-0.5 rounded flex items-baseline justify-between whitespace-nowrap">
+                                                <span className="text-[9.5px] font-bold text-red-700 shrink-0">最高</span>
+                                                <span className={`${isCompact ? 'text-[11px]' : 'text-xs sm:text-[12.5px]'} font-extrabold text-red-700 ml-0.5`}>{displayMax}</span>
                                             </div>
-                                            <div className="bg-blue-50 border border-blue-200/80 px-1.5 py-1 rounded flex items-baseline justify-between">
-                                                <span className="text-[10px] sm:text-[11px] font-bold text-blue-700">最低</span>
-                                                <span className="text-xs sm:text-[13px] font-extrabold text-blue-700">{displayMin}</span>
+                                            <div className="bg-blue-50 border border-blue-200/80 px-1 py-0.5 rounded flex items-baseline justify-between whitespace-nowrap">
+                                                <span className="text-[9.5px] font-bold text-blue-700 shrink-0">最低</span>
+                                                <span className={`${isCompact ? 'text-[11px]' : 'text-xs sm:text-[12.5px]'} font-extrabold text-blue-700 ml-0.5`}>{displayMin}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -1648,6 +1699,7 @@
                             titleSuffix={section.subSubjects.length > 0 ? "主要教科（5教科）" : ""}
                             tableType="main"
                             isPrint={isPrint}
+                            compactLevel={compactLevel}
                             renderDiffText={renderDiffText}
                         />
                         <InteractiveReportTable
@@ -1656,6 +1708,7 @@
                             titleSuffix="実技・総合（4教科＋9教科平均）"
                             tableType="sub"
                             isPrint={isPrint}
+                            compactLevel={compactLevel}
                             renderDiffText={renderDiffText}
                         />
                     </div>
@@ -1679,7 +1732,7 @@
                                 <div className="bg-blue-600 p-2 rounded-lg shrink-0">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                                 </div>
-                                <h1 className="text-xl font-bold tracking-wider hidden sm:block whitespace-nowrap">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-2">v3.7</span></h1>
+                                <h1 className="text-xl font-bold tracking-wider hidden sm:block whitespace-nowrap">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-2">v3.8</span></h1>
                             </div>
                             
                             {/* Settings Button & Clear Data */}
@@ -2034,40 +2087,7 @@
                                         <hr className="border-slate-200" />
 
                                         {/* JSON Local Manage */}
-                                        <div className="flex flex-col gap-2">
-                                            <h4 className="font-bold text-slate-500 flex items-center gap-2 text-xs">
-                                                <IconFileJson /> 🗄️ JSON管理
-                                            </h4>
-                                            <div className="flex gap-2">
-                                                <button 
-                                                    onClick={handleJsonExport} 
-                                                    className="flex-1 border border-slate-300 text-slate-600 font-bold py-2 rounded flex items-center justify-center gap-1 hover:bg-slate-50 transition-colors text-xs bg-white"
-                                                >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> 
-                                                    保存
-                                                </button>
-                                                <label className="flex-1 border border-slate-300 text-slate-600 font-bold py-2 rounded flex items-center justify-center gap-1 hover:bg-slate-50 transition-colors cursor-pointer text-xs bg-white">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg> 
-                                                    読込
-                                                    <input type="file" accept=".json" className="hidden" onChange={handleJsonImport} />
-                                                </label>
-                                            </div>
-                                        </div>
-
-                                    </div>
-                                </div>
-                                
-                                {/* Settings Panel Overlay */}
-                                {isSettingsOpen && (
-                                    <div 
-                                        className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm z-40" 
-                                        onClick={() => setIsSettingsOpen(false)}
-                                    ></div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* --- PRINT MENU MODAL (v3.3) --- */}
+                        {/* --- PRINT MENU MODAL (v3.8) --- */}
                         {isPrintMenuOpen && (
                             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setIsPrintMenuOpen(false)}>
                                 <div className="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
@@ -2075,30 +2095,63 @@
                                         <h3 className="font-bold flex items-center gap-2"><IconPrinter /> PDF/印刷 出力設定</h3>
                                         <button onClick={() => setIsPrintMenuOpen(false)} className="text-slate-400 hover:text-white p-1 rounded-full transition-colors"><IconX /></button>
                                     </div>
-                                    <div className="p-5 overflow-y-auto max-h-[80vh] bg-slate-50 flex flex-col gap-6">
+                                    <div className="p-5 overflow-y-auto max-h-[80vh] bg-slate-50 flex flex-col gap-5">
                                         
                                         {/* 1. 出力項目の選択 */}
-                                        <div className="flex flex-col gap-3">
+                                        <div className="flex flex-col gap-2.5">
                                             <h4 className="font-bold text-slate-700 text-sm border-b border-slate-200 pb-1">1. 出力する試験の種別</h4>
                                             <div className="grid grid-cols-1 gap-2">
-                                                <label className="flex items-center gap-3 cursor-pointer p-2.5 border border-slate-200 bg-white rounded-lg hover:bg-blue-50 transition-colors shadow-sm">
+                                                <label className="flex items-center gap-3 cursor-pointer p-2 border border-slate-200 bg-white rounded-lg hover:bg-blue-50 transition-colors shadow-sm">
                                                     <input type="checkbox" className="w-5 h-5 text-blue-600 rounded" checked={printConfig.types.regular} onChange={(e) => setPrintConfig({...printConfig, types: {...printConfig.types, regular: e.target.checked}})} />
                                                     <span className="font-bold text-sm text-blue-700">定期試験を含める</span>
                                                 </label>
-                                                <label className="flex items-center gap-3 cursor-pointer p-2.5 border border-slate-200 bg-white rounded-lg hover:bg-green-50 transition-colors shadow-sm">
+                                                <label className="flex items-center gap-3 cursor-pointer p-2 border border-slate-200 bg-white rounded-lg hover:bg-green-50 transition-colors shadow-sm">
                                                     <input type="checkbox" className="w-5 h-5 text-green-600 rounded" checked={printConfig.types.benesse} onChange={(e) => setPrintConfig({...printConfig, types: {...printConfig.types, benesse: e.target.checked}})} />
                                                     <span className="font-bold text-sm text-green-700">学力推移調査を含める</span>
                                                 </label>
-                                                <label className="flex items-center gap-3 cursor-pointer p-2.5 border border-slate-200 bg-white rounded-lg hover:bg-purple-50 transition-colors shadow-sm">
+                                                <label className="flex items-center gap-3 cursor-pointer p-2 border border-slate-200 bg-white rounded-lg hover:bg-purple-50 transition-colors shadow-sm">
                                                     <input type="checkbox" className="w-5 h-5 text-purple-600 rounded" checked={printConfig.types.comprehensive} onChange={(e) => setPrintConfig({...printConfig, types: {...printConfig.types, comprehensive: e.target.checked}})} />
                                                     <span className="font-bold text-sm text-purple-700">学期総合を含める</span>
                                                 </label>
                                             </div>
                                         </div>
 
-                                        {/* 2. 出力対象の選択 */}
-                                        <div className="flex flex-col gap-3">
-                                            <h4 className="font-bold text-slate-700 text-sm border-b border-slate-200 pb-1">2. 出力する生徒の範囲</h4>
+                                        {/* 2. 折れ線グラフの印刷有無（1人1枚 or 1人2枚） */}
+                                        <div className="flex flex-col gap-2.5">
+                                            <h4 className="font-bold text-slate-700 text-sm border-b border-slate-200 pb-1">2. 折れ線グラフの印刷（ページ構成）</h4>
+                                            <div className="grid grid-cols-1 gap-2">
+                                                <label className={`flex items-start gap-3 cursor-pointer p-2.5 border rounded-lg transition-colors ${!printConfig.includeCharts ? 'bg-emerald-50 border-emerald-400 ring-1 ring-emerald-400' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
+                                                    <input
+                                                        type="radio"
+                                                        name="printIncludeCharts"
+                                                        className="w-4 h-4 mt-0.5 text-emerald-600"
+                                                        checked={!printConfig.includeCharts}
+                                                        onChange={() => setPrintConfig({...printConfig, includeCharts: false})}
+                                                    />
+                                                    <div>
+                                                        <div className="font-bold text-sm text-slate-800">📄 表・サマリーのみ印刷（1人につき必ず1枚）</div>
+                                                        <div className="text-[11px] text-slate-500 mt-0.5">名前・過去平均（最高/最低）・各試験の点数を1ページにまとめて出力します</div>
+                                                    </div>
+                                                </label>
+                                                <label className={`flex items-start gap-3 cursor-pointer p-2.5 border rounded-lg transition-colors ${printConfig.includeCharts ? 'bg-blue-50 border-blue-400 ring-1 ring-blue-400' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
+                                                    <input
+                                                        type="radio"
+                                                        name="printIncludeCharts"
+                                                        className="w-4 h-4 mt-0.5 text-blue-600"
+                                                        checked={printConfig.includeCharts}
+                                                        onChange={() => setPrintConfig({...printConfig, includeCharts: true})}
+                                                    />
+                                                    <div>
+                                                        <div className="font-bold text-sm text-slate-800">📈 グラフも印刷する（1人につき必ず2枚）</div>
+                                                        <div className="text-[11px] text-slate-500 mt-0.5">1ページ目に表・サマリー、2ページ目に全教科表示の折れ線グラフを出力します</div>
+                                                    </div>
+                                                </label>
+                                            </div>
+                                        </div>
+
+                                        {/* 3. 出力対象の選択 */}
+                                        <div className="flex flex-col gap-2.5">
+                                            <h4 className="font-bold text-slate-700 text-sm border-b border-slate-200 pb-1">3. 出力する生徒の範囲</h4>
                                             <div className="flex flex-col gap-2">
                                                 <label className={`flex items-center gap-3 cursor-pointer p-2.5 border rounded-lg transition-colors ${printConfig.mode === 'all' ? 'bg-blue-50 border-blue-300' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
                                                     <input type="radio" name="printMode" value="all" className="w-4 h-4" checked={printConfig.mode === 'all'} onChange={() => setPrintConfig({...printConfig, mode: 'all'})} />
@@ -2225,15 +2278,24 @@
                                                 <IconChevronRight />
                                             </button>
                                         </div>
-                                        <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-2 sm:gap-3">
+                                            <label className="hidden md:flex items-center gap-1.5 text-xs bg-slate-700/70 hover:bg-slate-700 px-2.5 py-1.5 rounded border border-slate-600 cursor-pointer select-none">
+                                                <input
+                                                    type="checkbox"
+                                                    className="w-3.5 h-3.5 accent-blue-500 rounded"
+                                                    checked={printConfig.includeCharts}
+                                                    onChange={e => setPrintConfig({...printConfig, includeCharts: e.target.checked})}
+                                                />
+                                                <span className="font-bold text-slate-200">グラフも印刷(2枚)</span>
+                                            </label>
                                             <button 
                                                 onClick={() => {
-                                                    // 個人の場合は現在の全種別を出力する
-                                                    triggerPrint([selectedStudentId], { regular: true, benesse: true, comprehensive: true });
+                                                    // 個人の場合は現在選択中のグラフ有無設定を使って出力
+                                                    triggerPrint([selectedStudentId], printConfig.types, printConfig.includeCharts);
                                                 }}
-                                                className="hidden sm:flex text-xs bg-slate-700 hover:bg-slate-600 text-white font-bold py-1.5 px-3 rounded border border-slate-600 items-center gap-1 shadow-sm transition-colors"
+                                                className="hidden sm:flex text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-1.5 px-3 rounded border border-emerald-500 items-center gap-1 shadow-sm transition-colors"
                                             >
-                                                <IconPrinter /> この生徒をPDF出力
+                                                <IconPrinter /> この生徒をPDF出力 ({printConfig.includeCharts ? '2枚' : '1枚'})
                                             </button>
                                             <button onClick={() => setSelectedStudentId(null)} className="text-slate-400 hover:text-white transition-colors bg-slate-700/50 p-1.5 sm:p-2 rounded-full shrink-0">
                                                 <IconX />
@@ -2266,26 +2328,140 @@
                             const filteredData = detailData.filter(section => printTargetTypes[section.type]);
                             if (filteredData.length === 0) return null;
 
-                            const studentName = filteredData[0].rawName; // Or get from records
-                            
+                            const studentName = filteredData[0].rawName;
+
+                            // 1ページ目（表＋サマリー）が必ず1枚に収まるよう、試験回数やセクション数から密度と縮小率を自動計算
+                            let totalTableRows = 0;
+                            let totalCardRows = 0;
+                            let totalTables = 0;
+                            filteredData.forEach(sec => {
+                                const totalSubs = sec.mainSubjects.length + sec.subSubjects.length;
+                                totalCardRows += Math.ceil(totalSubs / 5);
+                                totalTables += 1;
+                                totalTableRows += sec.history.length;
+                                if (sec.subSubjects.length > 0) {
+                                    totalTables += 1;
+                                    totalTableRows += sec.history.length;
+                                }
+                            });
+
+                            const compactLevel = (totalTableRows >= 13 || filteredData.length >= 2)
+                                ? 'ultra'
+                                : (totalTableRows >= 9 ? 'compact' : 'normal');
+
+                            // A4縦1ページ（約980px相当）に対する推定高さを計算し、超える場合はzoomで自動縮小して確実に1ページへ収める
+                            const rowH = compactLevel === 'ultra' ? 25 : (compactLevel === 'compact' ? 29 : 35);
+                            const cardRowH = compactLevel === 'normal' ? 76 : 58;
+                            const estimatedPage1Height = 46 + (filteredData.length * 30) + (totalCardRows * cardRowH) + (totalTables * 34) + (totalTableRows * rowH);
+                            const page1Zoom = estimatedPage1Height > 960 ? Math.max(0.55, Number((960 / estimatedPage1Height).toFixed(3))) : 1;
+
+                            // 2ページ目（グラフページ）用のチャート一覧を構築
+                            const chartBlocks = [];
+                            if (printIncludeCharts) {
+                                filteredData.forEach(sec => {
+                                    const mainChartSubs = getChartSubjectsForTable(sec.type, sec.mainSubjects, 'main');
+                                    if (mainChartSubs.length > 0) {
+                                        chartBlocks.push({
+                                            key: `${sec.type}_main`,
+                                            sectionTitle: sec.title,
+                                            subTitle: sec.subSubjects.length > 0 ? '主要教科（5教科＋平均点）' : (sec.type === 'benesse' ? '偏差値推移（各教科＋3教科）' : '各教科＋5教科平均点'),
+                                            colorClass: sec.colorClass,
+                                            titleColor: sec.titleColor,
+                                            history: sec.history,
+                                            chartSubjects: mainChartSubs,
+                                            isDeviation: sec.type === 'benesse'
+                                        });
+                                    }
+                                    const subChartSubs = getChartSubjectsForTable(sec.type, sec.subSubjects, 'sub');
+                                    if (subChartSubs.length > 0) {
+                                        chartBlocks.push({
+                                            key: `${sec.type}_sub`,
+                                            sectionTitle: sec.title,
+                                            subTitle: '実技4教科＋9教科平均点',
+                                            colorClass: sec.colorClass,
+                                            titleColor: sec.titleColor,
+                                            history: sec.history,
+                                            chartSubjects: subChartSubs,
+                                            isDeviation: false
+                                        });
+                                    }
+                                });
+                            }
+
+                            // 2ページ目のグラフ数に応じてSVGの高さと縮小率を自動調整（必ず2ページ目1枚に収める）
+                            const chartCount = chartBlocks.length;
+                            const printSvgHeight = chartCount <= 1 ? 310 : (chartCount === 2 ? 245 : (chartCount === 3 ? 195 : 165));
+                            const estimatedPage2Height = 46 + chartCount * (printSvgHeight + 70);
+                            const page2Zoom = estimatedPage2Height > 960 ? Math.max(0.6, Number((960 / estimatedPage2Height).toFixed(3))) : 1;
+
                             return (
-                                <div key={targetStudentId} className="page-break" style={{ padding: '0 10px', width: '100%', boxSizing: 'border-box' }}>
-                                    {/* Header */}
-                                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px', borderBottom: '2px solid #1e293b', paddingBottom: '8px' }}>
-                                        <div style={{ width: '36px', height: '36px', backgroundColor: '#3b82f6', borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '18px', marginRight: '12px', WebkitPrintColorAdjust: 'exact' }}>
-                                            {studentName.charAt(0)}
+                                <React.Fragment key={targetStudentId}>
+                                    {/* ===== 1ページ目：名前 ＋ 過去平均(最高/最低) ＋ 各試験の点数表 ===== */}
+                                    <div className="print-sheet" style={{ zoom: page1Zoom }}>
+                                        {/* Header */}
+                                        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '10px', borderBottom: '2px solid #1e293b', paddingBottom: '6px' }}>
+                                            <div style={{ width: '32px', height: '32px', backgroundColor: '#3b82f6', borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '16px', marginRight: '10px', WebkitPrintColorAdjust: 'exact' }}>
+                                                {studentName.charAt(0)}
+                                            </div>
+                                            <h2 style={{ fontSize: '21px', fontWeight: 'bold', margin: 0, color: '#0f172a' }}>
+                                                {studentName}
+                                                <span style={{ fontSize: '11px', fontWeight: 'normal', color: '#64748b', marginLeft: '10px' }}>個人成績 統合レポート</span>
+                                            </h2>
                                         </div>
-                                        <h2 style={{ fontSize: '24px', fontWeight: 'bold', margin: 0, color: '#0f172a' }}>
-                                            {studentName}
-                                            <span style={{ fontSize: '12px', fontWeight: 'normal', color: '#64748b', marginLeft: '12px' }}>個人成績 統合レポート</span>
-                                        </h2>
+
+                                        {/* Sections (Tables & Stats Only) */}
+                                        {filteredData.map(section => (
+                                            <ReportSection
+                                                key={section.type}
+                                                section={section}
+                                                isPrint={true}
+                                                compactLevel={compactLevel}
+                                            />
+                                        ))}
                                     </div>
 
-                                    {/* Sections */}
-                                    {filteredData.map(section => (
-                                        <ReportSection key={section.type} section={section} isPrint={true} />
-                                    ))}
-                                </div>
+                                    {/* ===== 2ページ目：全教科表示の折れ線グラフ（グラフ印刷ONのときのみ出力） ===== */}
+                                    {printIncludeCharts && chartBlocks.length > 0 && (
+                                        <div className="print-sheet" style={{ zoom: page2Zoom }}>
+                                            {/* Page 2 Header */}
+                                            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '10px', borderBottom: '2px solid #1e293b', paddingBottom: '6px' }}>
+                                                <div style={{ width: '32px', height: '32px', backgroundColor: '#3b82f6', borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '16px', marginRight: '10px', WebkitPrintColorAdjust: 'exact' }}>
+                                                    {studentName.charAt(0)}
+                                                </div>
+                                                <h2 style={{ fontSize: '21px', fontWeight: 'bold', margin: 0, color: '#0f172a' }}>
+                                                    {studentName}
+                                                    <span style={{ fontSize: '11px', fontWeight: 'normal', color: '#64748b', marginLeft: '10px' }}>個人成績 推移グラフ（全教科表示）</span>
+                                                </h2>
+                                            </div>
+
+                                            {/* Charts */}
+                                            <div className="flex flex-col gap-3">
+                                                {chartBlocks.map(cb => (
+                                                    <div key={cb.key} className="border border-slate-300 rounded-lg overflow-hidden bg-white">
+                                                        <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200 flex items-center justify-between">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className={`w-3 h-3 rounded-full ${cb.colorClass}`}></span>
+                                                                <span className={`font-bold text-sm ${cb.titleColor}`}>{cb.sectionTitle}</span>
+                                                                <span className="text-xs font-bold text-slate-600">— {cb.subTitle}</span>
+                                                            </div>
+                                                            <span className="text-[10px] font-bold text-slate-500">
+                                                                ※太い点線は{cb.isDeviation ? '3教科偏差値' : '平均点'}
+                                                            </span>
+                                                        </div>
+                                                        <SubjectLineChart
+                                                            history={cb.history}
+                                                            chartSubjects={cb.chartSubjects}
+                                                            isDeviation={cb.isDeviation}
+                                                            forceAllSubjects={true}
+                                                            isPrint={true}
+                                                            customSvgHeight={printSvgHeight}
+                                                        />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </React.Fragment>
                             );
                         })}
                     </div>
