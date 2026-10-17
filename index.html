@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BLEND 成績推移トラッカー v3.9</title>
+    <title>BLEND 成績推移トラッカー v4.0</title>
     <!-- React & Babelのバージョンを安定版に固定 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
@@ -38,7 +38,7 @@
             .print-only { display: none !important; }
         }
         @media print {
-            @page { size: A4 portrait; margin: 8mm 10mm; }
+            @page { size: A4 portrait; margin: 7mm 9mm; }
             body { 
                 background-color: white !important; 
                 margin: 0; padding: 0; 
@@ -57,6 +57,7 @@
                 break-after: page !important;
                 page-break-inside: avoid !important;
                 break-inside: avoid !important;
+                overflow: hidden !important;
             }
             .print-sheet:last-child {
                 page-break-after: auto !important;
@@ -170,11 +171,9 @@
 
         // 折れ線グラフ＆教科切り替えコンポーネント
         const SubjectLineChart = ({ history, chartSubjects, isDeviation, forceAllSubjects = false, isPrint = false, customSvgHeight = null }) => {
-            // デフォルトでは平均点（3教科偏差値）の黒いグラフのみを選択状態にする（forceAllSubjects時は全教科）
+            // デフォルトですべてのグラフ（全教科＋平均点/偏差値）を選択状態にする
             const getDefaultSelectedSubs = (subjects) => {
-                if (forceAllSubjects) return subjects;
-                const avgSubs = subjects.filter(s => SUBJECT_CHART_CONFIG[s] && SUBJECT_CHART_CONFIG[s].isAvg);
-                return avgSubs.length > 0 ? avgSubs : subjects;
+                return subjects;
             };
 
             const [selectedSubs, setSelectedSubs] = useState(() => getDefaultSelectedSubs(chartSubjects));
@@ -267,8 +266,8 @@
             const svgHeight = customSvgHeight || (isVeryMany ? 295 : 280);
             const padLeft = 44;
             const padRight = 24;
-            const padTop = 26;
-            const padBottom = isVeryMany ? 60 : 48;
+            const padTop = isPrint ? 18 : 26;
+            const padBottom = isVeryMany ? (isPrint ? 46 : 60) : (isPrint ? 36 : 48);
             const plotW = svgWidth - padLeft - padRight;
             const plotH = svgHeight - padTop - padBottom;
 
@@ -320,7 +319,7 @@
                             desiredY = lastLabelY + 10;
                         }
                         // 下端・上端からはみ出さないように制限
-                        desiredY = Math.max(12, Math.min(svgHeight - padBottom - 4, desiredY));
+                        desiredY = Math.max(11, Math.min(svgHeight - padBottom - 4, desiredY));
                         map[`${pt.sub}_${colIdx}`] = desiredY;
                         lastLabelY = desiredY;
                     });
@@ -329,11 +328,13 @@
             }, [history, orderedSubjects, activeSubs, minY, maxY, svgHeight, padBottom]);
 
             return (
-                <div className={`${isPrint ? 'bg-white p-2' : 'bg-slate-50/80 border-t border-slate-200 p-3 sm:p-4'} transition-all`} onClick={e => e.stopPropagation()}>
+                <div className={`${isPrint ? 'bg-slate-50/60 border-t border-slate-200 px-2.5 py-1.5' : 'bg-slate-50/80 border-t border-slate-200 p-3 sm:p-4'} transition-all`} onClick={e => e.stopPropagation()}>
                     {/* コントロールバー（教科ボタン＋一括切替） */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                    <div className={`flex flex-wrap items-center justify-between gap-1.5 ${isPrint ? 'mb-1' : 'mb-2'}`}>
                         <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="text-[11px] font-bold text-slate-500 mr-1">表示教科:</span>
+                            <span className="text-[10.5px] font-bold text-slate-500 mr-0.5">
+                                {isPrint ? 'グラフ凡例 (太点線は平均/3教科):' : '表示教科:'}
+                            </span>
                             {chartSubjects.map(sub => {
                                 const cfg = SUBJECT_CHART_CONFIG[sub] || { color: '#64748b', bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-300', label: sub };
                                 const isActive = activeSubs.includes(sub);
@@ -342,7 +343,7 @@
                                         key={sub}
                                         type="button"
                                         onClick={() => toggleSubject(sub)}
-                                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border flex items-center gap-1.5 transition-all ${
+                                        className={`${isPrint ? 'px-2 py-0.5 text-[10px]' : 'px-2.5 py-0.5 text-[11px]'} rounded-full font-bold border flex items-center gap-1 transition-all ${
                                             isActive
                                                 ? `${cfg.bg} ${cfg.text} ${cfg.border} shadow-sm`
                                                 : 'bg-white text-slate-400 border-slate-200 opacity-60 hover:opacity-90'
@@ -590,7 +591,7 @@
         };
 
         // 表と折れ線グラフを連動させるラッパーコンポーネント
-        const InteractiveReportTable = ({ section, subjects, titleSuffix, tableType, isPrint, compactLevel = 'normal', renderDiffText }) => {
+        const InteractiveReportTable = ({ section, subjects, titleSuffix, tableType, isPrint, includeChartsInPrint = false, printSvgHeight = null, compactLevel = 'normal', renderDiffText }) => {
             // デフォルトでグラフを表示状態にする（画面表示時）
             const [isChartOpen, setIsChartOpen] = useState(true);
 
@@ -604,16 +605,18 @@
             const isUltraCompact = compactLevel === 'ultra';
             const isCompact = compactLevel === 'compact' || isUltraCompact;
             const cellPy = isUltraCompact ? 'py-0.5' : (isCompact ? 'py-1' : 'py-2');
-            const headerPy = isUltraCompact ? 'py-1' : (isCompact ? 'py-1.5' : 'py-2');
+            const headerPy = isUltraCompact ? 'py-0.5' : (isCompact ? 'py-1' : 'py-2');
             const scoreTextSize = isUltraCompact ? 'text-[11px]' : (isCompact ? 'text-[12px]' : 'text-[13px]');
             const diffTextSize = isUltraCompact ? 'text-[8.5px]' : (isCompact ? 'text-[9px]' : 'text-[10px]');
 
+            const showChart = (!isPrint && isChartOpen) || (isPrint && includeChartsInPrint);
+
             return (
-                <div className={`bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden relative z-0 ${isPrint ? 'mb-2' : 'mb-4'}`}>
+                <div className={`bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden relative z-0 ${isPrint ? 'mb-1.5' : 'mb-4'}`}>
                     {/* テーブル上部バー（タップ案内） */}
                     <div
                         onClick={() => !isPrint && chartSubjects.length > 0 && setIsChartOpen(!isChartOpen)}
-                        className={`px-3 ${isCompact ? 'py-1' : 'py-1.5'} border-b border-slate-200 flex justify-between items-center transition-colors ${
+                        className={`px-3 ${isUltraCompact ? 'py-0.5' : (isCompact ? 'py-1' : 'py-1.5')} border-b border-slate-200 flex justify-between items-center transition-colors ${
                             !isPrint && chartSubjects.length > 0 ? 'bg-slate-50 hover:bg-blue-50/60 cursor-pointer' : 'bg-slate-50'
                         }`}
                     >
@@ -694,12 +697,15 @@
                         </table>
                     </div>
 
-                    {/* 折れ線グラフ表示エリア（画面表示時のみここに出力。印刷時は2ページ目に分離） */}
-                    {!isPrint && isChartOpen && chartSubjects.length > 0 && (
+                    {/* 折れ線グラフ表示エリア（一覧表のすぐ下に一体表示） */}
+                    {showChart && chartSubjects.length > 0 && (
                         <SubjectLineChart
                             history={section.history}
                             chartSubjects={chartSubjects}
                             isDeviation={section.type === 'benesse'}
+                            forceAllSubjects={isPrint}
+                            isPrint={isPrint}
+                            customSvgHeight={isPrint ? printSvgHeight : null}
                         />
                     )}
                 </div>
@@ -744,16 +750,16 @@
             const touchStartX = useRef(null);
             const touchEndX = useRef(null);
 
-            // Print State (v3.9)
+            // Print State (v4.0)
             const [isPrinting, setIsPrinting] = useState(false);
             const [printTargetIds, setPrintTargetIds] = useState([]); 
             const [printTargetTypes, setPrintTargetTypes] = useState({ regular: true, benesse: true, comprehensive: true });
-            const [printIncludeCharts, setPrintIncludeCharts] = useState(false);
+            const [printIncludeCharts, setPrintIncludeCharts] = useState(true);
             
             const [isPrintMenuOpen, setIsPrintMenuOpen] = useState(false);
             const [printConfig, setPrintConfig] = useState({
                 types: { regular: true, benesse: true, comprehensive: true },
-                includeCharts: false, // false = 1枚(表のみ), true = 2枚(2ページ目に全教科グラフ)
+                includeCharts: true, // true = 各試験シートに一覧表＋グラフを統合表示, false = 一覧表のみ表示
                 mode: 'all', // 'all', 'class', 'individual'
                 targetClass: '',
                 selectedStudents: []
@@ -1638,18 +1644,21 @@
             }
 
             // --- Report Section Component (Reusable) ---
-            const ReportSection = ({ section, isPrint, compactLevel = 'normal' }) => {
+            const ReportSection = ({ section, isPrint, includeChartsInPrint = false, printSvgHeight = null, compactLevel = 'normal' }) => {
                 if (!section) return null;
 
                 const isUltraCompact = compactLevel === 'ultra';
                 const isCompact = compactLevel === 'compact' || isUltraCompact;
 
                 return (
-                    <div className={`${isPrint ? (isCompact ? 'mb-2.5' : 'mb-4') : 'mb-8'} relative pl-3 sm:pl-4 border-l-2 border-slate-200`}>
-                        <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full ${section.colorClass} border-2 border-white flex items-center justify-center`}></div>
+                    <div className={`${isPrint ? 'mb-1' : 'mb-8 relative pl-3 sm:pl-4 border-l-2 border-slate-200'}`}>
+                        {!isPrint && (
+                            <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full ${section.colorClass} border-2 border-white flex items-center justify-center`}></div>
+                        )}
                         
-                        <div className={`flex flex-wrap items-baseline justify-between gap-2 ${isCompact ? 'mb-1.5' : 'mb-2.5'}`}>
+                        <div className={`flex flex-wrap items-baseline justify-between gap-2 ${isUltraCompact ? 'mb-1' : (isCompact ? 'mb-1.5' : 'mb-2.5')}`}>
                             <h3 className={`${isCompact ? 'text-sm' : 'text-base sm:text-lg'} font-bold ${section.titleColor} flex items-center gap-2`}>
+                                {isPrint && <span className={`inline-block w-3 h-3 rounded-full ${section.colorClass}`}></span>}
                                 {section.title}
                                 <span className="text-[11px] font-bold text-slate-600 bg-slate-200/80 px-2 py-0.5 rounded-full">
                                     全{section.history.filter(h=>h.record).length}回分の個人推移
@@ -1660,7 +1669,7 @@
                             </span>
                         </div>
                         
-                        <div className={`stat-card-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 ${isCompact ? 'gap-1.5 mb-2' : 'gap-2.5 mb-3'}`}>
+                        <div className={`stat-card-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 ${isUltraCompact ? 'gap-1 mb-1.5' : (isCompact ? 'gap-1.5 mb-2' : 'gap-2.5 mb-3')}`}>
                             {[...section.mainSubjects, ...section.subSubjects].map(sub => {
                                 const stat = section.stats[sub];
                                 if (!stat) return null;
@@ -1670,17 +1679,17 @@
                                 const displayMin = isFloat ? Number(stat.min).toFixed(1) : Math.round(stat.min).toString();
 
                                 return (
-                                    <div key={sub} className={`${isCompact ? 'p-1.5' : 'p-2.5'} rounded-lg border border-slate-300 shadow-sm flex flex-col justify-between bg-white`}>
-                                        <div className={`${isCompact ? 'text-[11px] mb-0.5 pb-0.5' : 'text-xs sm:text-[13px] mb-1 pb-1'} font-extrabold text-slate-800 border-b border-slate-200 truncate`} title={sub}>
+                                    <div key={sub} className={`${isUltraCompact ? 'p-1' : (isCompact ? 'p-1.5' : 'p-2.5')} rounded-lg border border-slate-300 shadow-sm flex flex-col justify-between bg-white`}>
+                                        <div className={`${isUltraCompact ? 'text-[10.5px] mb-0.5 pb-0.5' : (isCompact ? 'text-[11px] mb-0.5 pb-0.5' : 'text-xs sm:text-[13px] mb-1 pb-1')} font-extrabold text-slate-800 border-b border-slate-200 truncate`} title={sub}>
                                             {sub}
                                         </div>
                                         <div className="flex justify-between items-baseline my-0.5 px-0.5">
                                             <span className="text-[10px] font-bold text-slate-600 whitespace-nowrap">過去平均</span>
-                                            <span className={`${isCompact ? 'text-base' : 'text-lg sm:text-xl'} font-extrabold leading-none ${section.titleColor}`}>
+                                            <span className={`${isUltraCompact ? 'text-sm' : (isCompact ? 'text-base' : 'text-lg sm:text-xl')} font-extrabold leading-none ${section.titleColor}`}>
                                                 {displayAvg}
                                             </span>
                                         </div>
-                                        <div className={`grid grid-cols-2 gap-1 ${isCompact ? 'mt-1 pt-1' : 'mt-1.5 pt-1.5'} border-t border-slate-100`}>
+                                        <div className={`grid grid-cols-2 gap-1 ${isUltraCompact ? 'mt-0.5 pt-0.5' : (isCompact ? 'mt-1 pt-1' : 'mt-1.5 pt-1.5')} border-t border-slate-100`}>
                                             <div className="bg-red-50 border border-red-200/80 px-1 py-0.5 rounded flex items-baseline justify-between whitespace-nowrap">
                                                 <span className="text-[9.5px] font-bold text-red-700 shrink-0">最高</span>
                                                 <span className={`${isCompact ? 'text-[11px]' : 'text-xs sm:text-[12.5px]'} font-extrabold text-red-700 ml-0.5`}>{displayMax}</span>
@@ -1701,6 +1710,8 @@
                             titleSuffix={section.subSubjects.length > 0 ? "主要教科（5教科）" : ""}
                             tableType="main"
                             isPrint={isPrint}
+                            includeChartsInPrint={includeChartsInPrint}
+                            printSvgHeight={printSvgHeight}
                             compactLevel={compactLevel}
                             renderDiffText={renderDiffText}
                         />
@@ -1710,6 +1721,8 @@
                             titleSuffix="実技・総合（4教科＋9教科平均）"
                             tableType="sub"
                             isPrint={isPrint}
+                            includeChartsInPrint={includeChartsInPrint}
+                            printSvgHeight={printSvgHeight}
                             compactLevel={compactLevel}
                             renderDiffText={renderDiffText}
                         />
@@ -1734,7 +1747,7 @@
                                 <div className="bg-blue-600 p-2 rounded-lg shrink-0">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                                 </div>
-                                <h1 className="text-xl font-bold tracking-wider hidden sm:block whitespace-nowrap">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-2">v3.9</span></h1>
+                                <h1 className="text-xl font-bold tracking-wider hidden sm:block whitespace-nowrap">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-2">v4.0</span></h1>
                             </div>
                             
                             {/* Settings Button & Clear Data */}
@@ -2149,23 +2162,10 @@
                                             </div>
                                         </div>
 
-                                        {/* 2. 折れ線グラフの印刷有無（1人1枚 or 1人2枚） */}
+                                        {/* 2. 折れ線グラフの印刷有無（一覧表と同じページに統合して1枚に収める） */}
                                         <div className="flex flex-col gap-2.5">
-                                            <h4 className="font-bold text-slate-700 text-sm border-b border-slate-200 pb-1">2. 折れ線グラフの印刷（ページ構成）</h4>
+                                            <h4 className="font-bold text-slate-700 text-sm border-b border-slate-200 pb-1">2. 折れ線グラフの印刷有無</h4>
                                             <div className="grid grid-cols-1 gap-2">
-                                                <label className={`flex items-start gap-3 cursor-pointer p-2.5 border rounded-lg transition-colors ${!printConfig.includeCharts ? 'bg-emerald-50 border-emerald-400 ring-1 ring-emerald-400' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
-                                                    <input
-                                                        type="radio"
-                                                        name="printIncludeCharts"
-                                                        className="w-4 h-4 mt-0.5 text-emerald-600"
-                                                        checked={!printConfig.includeCharts}
-                                                        onChange={() => setPrintConfig({...printConfig, includeCharts: false})}
-                                                    />
-                                                    <div>
-                                                        <div className="font-bold text-sm text-slate-800">📄 表・サマリーのみ印刷（1人につき必ず1枚）</div>
-                                                        <div className="text-[11px] text-slate-500 mt-0.5">名前・過去平均（最高/最低）・各試験の点数を1ページにまとめて出力します</div>
-                                                    </div>
-                                                </label>
                                                 <label className={`flex items-start gap-3 cursor-pointer p-2.5 border rounded-lg transition-colors ${printConfig.includeCharts ? 'bg-blue-50 border-blue-400 ring-1 ring-blue-400' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
                                                     <input
                                                         type="radio"
@@ -2175,8 +2175,21 @@
                                                         onChange={() => setPrintConfig({...printConfig, includeCharts: true})}
                                                     />
                                                     <div>
-                                                        <div className="font-bold text-sm text-slate-800">📈 グラフも印刷する（1人につき必ず2枚）</div>
-                                                        <div className="text-[11px] text-slate-500 mt-0.5">1ページ目に表・サマリー、2ページ目に全教科表示の折れ線グラフを出力します</div>
+                                                        <div className="font-bold text-sm text-slate-800">📈 一覧表とグラフをまとめて印刷（グラフあり）</div>
+                                                        <div className="text-[11px] text-slate-500 mt-0.5">選んだ試験種別ごとに、一覧表と全教科の折れ線グラフを同じ1枚（A4縦）に収めて出力します</div>
+                                                    </div>
+                                                </label>
+                                                <label className={`flex items-start gap-3 cursor-pointer p-2.5 border rounded-lg transition-colors ${!printConfig.includeCharts ? 'bg-emerald-50 border-emerald-400 ring-1 ring-emerald-400' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
+                                                    <input
+                                                        type="radio"
+                                                        name="printIncludeCharts"
+                                                        className="w-4 h-4 mt-0.5 text-emerald-600"
+                                                        checked={!printConfig.includeCharts}
+                                                        onChange={() => setPrintConfig({...printConfig, includeCharts: false})}
+                                                    />
+                                                    <div>
+                                                        <div className="font-bold text-sm text-slate-800">📄 一覧表・サマリーのみ印刷（グラフなし）</div>
+                                                        <div className="text-[11px] text-slate-500 mt-0.5">折れ線グラフは含めず、過去平均（最高/最低）と成績一覧表のみを1枚ずつ大きく出力します</div>
                                                     </div>
                                                 </label>
                                             </div>
@@ -2319,7 +2332,7 @@
                                                     checked={printConfig.includeCharts}
                                                     onChange={e => setPrintConfig({...printConfig, includeCharts: e.target.checked})}
                                                 />
-                                                <span className="font-bold text-slate-200">グラフも印刷(2枚)</span>
+                                                <span className="font-bold text-slate-200">グラフも一緒に印刷</span>
                                             </label>
                                             <button 
                                                 onClick={() => {
@@ -2328,7 +2341,7 @@
                                                 }}
                                                 className="hidden sm:flex text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-1.5 px-3 rounded border border-emerald-500 items-center gap-1 shadow-sm transition-colors"
                                             >
-                                                <IconPrinter /> この生徒をPDF出力 ({printConfig.includeCharts ? '2枚' : '1枚'})
+                                                <IconPrinter /> この生徒をPDF出力 ({printConfig.includeCharts ? 'グラフあり' : '表のみ'})
                                             </button>
                                             <button onClick={() => setSelectedStudentId(null)} className="text-slate-400 hover:text-white transition-colors bg-slate-700/50 p-1.5 sm:p-2 rounded-full shrink-0">
                                                 <IconX />
@@ -2363,137 +2376,90 @@
 
                             const studentName = filteredData[0].rawName;
 
-                            // 1ページ目（表＋サマリー）が必ず1枚に収まるよう、試験回数やセクション数から密度と縮小率を自動計算
-                            let totalTableRows = 0;
-                            let totalCardRows = 0;
-                            let totalTables = 0;
-                            filteredData.forEach(sec => {
-                                const totalSubs = sec.mainSubjects.length + sec.subSubjects.length;
-                                totalCardRows += Math.ceil(totalSubs / 5);
-                                totalTables += 1;
-                                totalTableRows += sec.history.length;
-                                if (sec.subSubjects.length > 0) {
-                                    totalTables += 1;
-                                    totalTableRows += sec.history.length;
-                                }
-                            });
-
-                            const compactLevel = (totalTableRows >= 13 || filteredData.length >= 2)
-                                ? 'ultra'
-                                : (totalTableRows >= 9 ? 'compact' : 'normal');
-
-                            // A4縦1ページ（約980px相当）に対する推定高さを計算し、超える場合はzoomで自動縮小して確実に1ページへ収める
-                            const rowH = compactLevel === 'ultra' ? 25 : (compactLevel === 'compact' ? 29 : 35);
-                            const cardRowH = compactLevel === 'normal' ? 76 : 58;
-                            const estimatedPage1Height = 46 + (filteredData.length * 30) + (totalCardRows * cardRowH) + (totalTables * 34) + (totalTableRows * rowH);
-                            const page1Zoom = estimatedPage1Height > 960 ? Math.max(0.55, Number((960 / estimatedPage1Height).toFixed(3))) : 1;
-
-                            // 2ページ目（グラフページ）用のチャート一覧を構築
-                            const chartBlocks = [];
-                            if (printIncludeCharts) {
-                                filteredData.forEach(sec => {
-                                    const mainChartSubs = getChartSubjectsForTable(sec.type, sec.mainSubjects, 'main');
-                                    if (mainChartSubs.length > 0) {
-                                        chartBlocks.push({
-                                            key: `${sec.type}_main`,
-                                            sectionTitle: sec.title,
-                                            subTitle: sec.subSubjects.length > 0 ? '主要教科（5教科＋平均点）' : (sec.type === 'benesse' ? '偏差値推移（各教科＋3教科）' : '各教科＋5教科平均点'),
-                                            colorClass: sec.colorClass,
-                                            titleColor: sec.titleColor,
-                                            history: sec.history,
-                                            chartSubjects: mainChartSubs,
-                                            isDeviation: sec.type === 'benesse'
-                                        });
-                                    }
-                                    const subChartSubs = getChartSubjectsForTable(sec.type, sec.subSubjects, 'sub');
-                                    if (subChartSubs.length > 0) {
-                                        chartBlocks.push({
-                                            key: `${sec.type}_sub`,
-                                            sectionTitle: sec.title,
-                                            subTitle: '実技4教科＋9教科平均点',
-                                            colorClass: sec.colorClass,
-                                            titleColor: sec.titleColor,
-                                            history: sec.history,
-                                            chartSubjects: subChartSubs,
-                                            isDeviation: false
-                                        });
-                                    }
-                                });
-                            }
-
-                            // 2ページ目のグラフ数に応じてSVGの高さと縮小率を自動調整（必ず2ページ目1枚に収める）
-                            const chartCount = chartBlocks.length;
-                            const printSvgHeight = chartCount <= 1 ? 310 : (chartCount === 2 ? 245 : (chartCount === 3 ? 195 : 165));
-                            const estimatedPage2Height = 46 + chartCount * (printSvgHeight + 70);
-                            const page2Zoom = estimatedPage2Height > 960 ? Math.max(0.6, Number((960 / estimatedPage2Height).toFixed(3))) : 1;
-
+                            // 試験種別（セクション）ごとに1枚のA4縦ページ（.print-sheet）を生成し、
+                            // その中に「統計サマリー ＋ 成績一覧表 ＋ 折れ線グラフ」をすべて収める
                             return (
                                 <React.Fragment key={targetStudentId}>
-                                    {/* ===== 1ページ目：名前 ＋ 過去平均(最高/最低) ＋ 各試験の点数表 ===== */}
-                                    <div className="print-sheet" style={{ zoom: page1Zoom }}>
-                                        {/* Header */}
-                                        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '10px', borderBottom: '2px solid #1e293b', paddingBottom: '6px' }}>
-                                            <div style={{ width: '32px', height: '32px', backgroundColor: '#3b82f6', borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '16px', marginRight: '10px', WebkitPrintColorAdjust: 'exact' }}>
-                                                {studentName.charAt(0)}
-                                            </div>
-                                            <h2 style={{ fontSize: '21px', fontWeight: 'bold', margin: 0, color: '#0f172a' }}>
-                                                {studentName}
-                                                <span style={{ fontSize: '11px', fontWeight: 'normal', color: '#64748b', marginLeft: '10px' }}>個人成績 統合レポート</span>
-                                            </h2>
-                                        </div>
+                                    {filteredData.map((section) => {
+                                        const totalSubs = section.mainSubjects.length + section.subSubjects.length;
+                                        const cardRows = Math.ceil(totalSubs / 5);
+                                        const tableCount = 1 + (section.subSubjects.length > 0 ? 1 : 0);
+                                        const examCount = section.history.length;
 
-                                        {/* Sections (Tables & Stats Only) */}
-                                        {filteredData.map(section => (
-                                            <ReportSection
-                                                key={section.type}
-                                                section={section}
-                                                isPrint={true}
-                                                compactLevel={compactLevel}
-                                            />
-                                        ))}
-                                    </div>
+                                        // このセクション内のグラフ数を算出
+                                        const mainChartSubs = getChartSubjectsForTable(section.type, section.mainSubjects, 'main');
+                                        const subChartSubs = getChartSubjectsForTable(section.type, section.subSubjects, 'sub');
+                                        const chartCount = (mainChartSubs.length > 0 ? 1 : 0) + (subChartSubs.length > 0 ? 1 : 0);
 
-                                    {/* ===== 2ページ目：全教科表示の折れ線グラフ（グラフ印刷ONのときのみ出力） ===== */}
-                                    {printIncludeCharts && chartBlocks.length > 0 && (
-                                        <div className="print-sheet" style={{ zoom: page2Zoom }}>
-                                            {/* Page 2 Header */}
-                                            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '10px', borderBottom: '2px solid #1e293b', paddingBottom: '6px' }}>
-                                                <div style={{ width: '32px', height: '32px', backgroundColor: '#3b82f6', borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '16px', marginRight: '10px', WebkitPrintColorAdjust: 'exact' }}>
-                                                    {studentName.charAt(0)}
-                                                </div>
-                                                <h2 style={{ fontSize: '21px', fontWeight: 'bold', margin: 0, color: '#0f172a' }}>
-                                                    {studentName}
-                                                    <span style={{ fontSize: '11px', fontWeight: 'normal', color: '#64748b', marginLeft: '10px' }}>個人成績 推移グラフ（全教科表示）</span>
-                                                </h2>
-                                            </div>
+                                        // グラフの有無・試験回数・テーブル数に応じてコンパクトレベルを自動決定
+                                        let compactLevel = 'normal';
+                                        if (printIncludeCharts) {
+                                            if (examCount >= 9 || tableCount >= 2) {
+                                                compactLevel = 'ultra';
+                                            } else {
+                                                compactLevel = 'compact';
+                                            }
+                                        } else {
+                                            if (examCount >= 13 || (tableCount >= 2 && examCount >= 7)) {
+                                                compactLevel = 'ultra';
+                                            } else if (examCount >= 9 || tableCount >= 2) {
+                                                compactLevel = 'compact';
+                                            } else {
+                                                compactLevel = 'normal';
+                                            }
+                                        }
 
-                                            {/* Charts */}
-                                            <div className="flex flex-col gap-3">
-                                                {chartBlocks.map(cb => (
-                                                    <div key={cb.key} className="border border-slate-300 rounded-lg overflow-hidden bg-white">
-                                                        <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200 flex items-center justify-between">
-                                                            <div className="flex items-center gap-2">
-                                                                <span className={`w-3 h-3 rounded-full ${cb.colorClass}`}></span>
-                                                                <span className={`font-bold text-sm ${cb.titleColor}`}>{cb.sectionTitle}</span>
-                                                                <span className="text-xs font-bold text-slate-600">— {cb.subTitle}</span>
-                                                            </div>
-                                                            <span className="text-[10px] font-bold text-slate-500">
-                                                                ※太い点線は{cb.isDeviation ? '3教科偏差値' : '平均点'}
-                                                            </span>
+                                        // グラフのSVG高さを試験回数・テーブル数に応じて自動調整
+                                        let printSvgHeight = 200;
+                                        if (tableCount >= 2) {
+                                            printSvgHeight = examCount >= 6 ? 135 : 150;
+                                        } else {
+                                            if (examCount <= 6) printSvgHeight = 225;
+                                            else if (examCount <= 10) printSvgHeight = 195;
+                                            else if (examCount <= 13) printSvgHeight = 175;
+                                            else printSvgHeight = 160;
+                                        }
+
+                                        // A4縦1枚（安全上限 900px）に必ず収まるようにコンテンツ高さを推定し、必要に応じてzoomを適用
+                                        const cardRowH = compactLevel === 'ultra' ? 48 : (compactLevel === 'compact' ? 58 : 72);
+                                        const rowH = compactLevel === 'ultra' ? 22 : (compactLevel === 'compact' ? 27 : 34);
+                                        const tableBlockH = tableCount * (48 + examCount * rowH);
+                                        const chartBlockH = printIncludeCharts ? chartCount * (printSvgHeight + 44) : 0;
+                                        const estimatedHeight = 42 + 28 + (cardRows * cardRowH) + tableBlockH + chartBlockH;
+
+                                        const targetMaxH = 900;
+                                        const sheetZoom = estimatedHeight > targetMaxH
+                                            ? Math.max(0.52, Number((targetMaxH / estimatedHeight).toFixed(3)))
+                                            : 1;
+
+                                        return (
+                                            <div key={`${targetStudentId}_${section.type}`} className="print-sheet" style={{ zoom: sheetZoom }}>
+                                                {/* Sheet Header */}
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', borderBottom: '2px solid #1e293b', paddingBottom: '5px' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                                                        <div style={{ width: '30px', height: '30px', backgroundColor: '#3b82f6', borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '15px', marginRight: '10px', WebkitPrintColorAdjust: 'exact' }}>
+                                                            {studentName.charAt(0)}
                                                         </div>
-                                                        <SubjectLineChart
-                                                            history={cb.history}
-                                                            chartSubjects={cb.chartSubjects}
-                                                            isDeviation={cb.isDeviation}
-                                                            forceAllSubjects={true}
-                                                            isPrint={true}
-                                                            customSvgHeight={printSvgHeight}
-                                                        />
+                                                        <h2 style={{ fontSize: '20px', fontWeight: 'bold', margin: 0, color: '#0f172a' }}>
+                                                            {studentName}
+                                                            <span style={{ fontSize: '11px', fontWeight: 'normal', color: '#64748b', marginLeft: '10px' }}>
+                                                                個人成績レポート（{section.title}）
+                                                            </span>
+                                                        </h2>
                                                     </div>
-                                                ))}
+                                                </div>
+
+                                                {/* Section Content (Stats + Table + Chart in the same sheet) */}
+                                                <ReportSection
+                                                    section={section}
+                                                    isPrint={true}
+                                                    includeChartsInPrint={printIncludeCharts}
+                                                    printSvgHeight={printSvgHeight}
+                                                    compactLevel={compactLevel}
+                                                />
                                             </div>
-                                        </div>
-                                    )}
+                                        );
+                                    })}
                                 </React.Fragment>
                             );
                         })}
