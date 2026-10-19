@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BLEND 成績推移トラッカー v4.4</title>
+    <title>BLEND 成績推移トラッカー v5.0</title>
     <!-- React & Babelのバージョンを安定版に固定 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
@@ -730,6 +730,788 @@
         const IconFileJson = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M10 12a1 1 0 0 0-1 1v1a1 1 0 0 1-1 1 1 1 0 0 1 1 1v1a1 1 0 0 0 1 1"></path><path d="M14 18a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1 1 1 0 0 1-1-1v-1a1 1 0 0 0-1-1"></path></svg>;
         const IconPrinter = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>;
         const IconTrophy = () => <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>;
+        const IconUsers = () => <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>;
+        const IconChartBar = () => <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>;
+        const IconEdit = () => <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>;
+        const IconPlus = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
+
+        // 期生（コホート）別のカラーパレット定義
+        const COHORT_PALETTE = [
+            { color: '#2563eb', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-300', badge: 'bg-blue-600', lightBg: '#dbeafe' },
+            { color: '#10b981', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-300', badge: 'bg-emerald-600', lightBg: '#d1fae5' },
+            { color: '#f97316', bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-300', badge: 'bg-orange-500', lightBg: '#ffedd5' },
+            { color: '#a855f7', bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-300', badge: 'bg-purple-600', lightBg: '#f3e8ff' },
+            { color: '#ec4899', bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-300', badge: 'bg-pink-600', lightBg: '#fce7f3' },
+            { color: '#0891b2', bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-300', badge: 'bg-cyan-600', lightBg: '#cffafe' }
+        ];
+
+        // 特定の試験における受験者数と各科目の平均点を算出するヘルパー関数
+        const computeExamSummaryStats = (exam, allRecords) => {
+            if (!exam) return null;
+            const examRecords = allRecords.filter(r => r.examId === exam.id);
+            if (examRecords.length === 0) return { examineeCount: 0, totalStudents: 0, averages: {} };
+
+            const isBenesse = exam.type === 'benesse';
+            const coreSubjects = isBenesse ? ['国語点数', '数学点数', '英語点数'] : ['国語', '社会', '数学', '理科', '英語'];
+            const examineeCount = examRecords.filter(r => coreSubjects.every(sub => r.scores && r.scores[sub] !== undefined && r.scores[sub] !== null)).length;
+
+            const sums = {};
+            const counts = {};
+
+            examRecords.forEach(r => {
+                if (!r.scores) return;
+                const enriched = { ...r.scores };
+                const five = ['国語', '社会', '数学', '理科', '英語'];
+                const fiveVals = five.map(s => enriched[s]).filter(v => v !== undefined && v !== null && !isNaN(v));
+                if (fiveVals.length === 5) {
+                    const s5 = fiveVals.reduce((a, b) => a + Number(b), 0);
+                    if (enriched['5教科総点'] === undefined) enriched['5教科総点'] = s5;
+                    if (enriched['5教科平均点'] === undefined) enriched['5教科平均点'] = s5 / 5;
+                }
+                const nine = ['国語', '社会', '数学', '理科', '英語', '音楽', '美術', '保体', '技家'];
+                const nineVals = nine.map(s => enriched[s]).filter(v => v !== undefined && v !== null && !isNaN(v));
+                if (nineVals.length === 9) {
+                    const s9 = nineVals.reduce((a, b) => a + Number(b), 0);
+                    if (enriched['9教科総点'] === undefined) enriched['9教科総点'] = s9;
+                    if (enriched['9教科平均点'] === undefined) enriched['9教科平均点'] = s9 / 9;
+                }
+
+                Object.entries(enriched).forEach(([sub, val]) => {
+                    if (val !== undefined && val !== null && !isNaN(val)) {
+                        sums[sub] = (sums[sub] || 0) + Number(val);
+                        counts[sub] = (counts[sub] || 0) + 1;
+                    }
+                });
+            });
+
+            const averages = {};
+            Object.keys(sums).forEach(sub => {
+                if (counts[sub] > 0) {
+                    averages[sub] = sums[sub] / counts[sub];
+                }
+            });
+
+            return {
+                examineeCount,
+                totalStudents: examRecords.length,
+                averages
+            };
+        };
+
+        // --- 過年度比較（期生間比較：パターンA）コンポーネント（画面＆印刷共用） ---
+        const CrossCohortComparisonView = ({
+            cohorts,
+            exams,
+            records,
+            compareConfig,
+            setCompareConfig,
+            isPrint = false
+        }) => {
+            const { examType, mode, selectedNormExamName, customExamMap, baseCohortId, trendSubject, trendAlignMode } = compareConfig;
+
+            // 選択中の試験種別に該当する全期生の試験一覧
+            const typeExams = useMemo(() => {
+                return exams.filter(e => (e.type || 'regular') === examType);
+            }, [exams, examType]);
+
+            // 正規化した試験名ごとのユニークリストを生成
+            const normExamList = useMemo(() => {
+                const map = new Map();
+                typeExams.forEach(e => {
+                    const norm = normalizeName(e.name);
+                    if (!map.has(norm)) {
+                        map.set(norm, e.name);
+                    }
+                });
+                return Array.from(map.entries()).map(([normName, displayName]) => ({ normName, displayName }));
+            }, [typeExams]);
+
+            // 試験種別に応じた比較対象科目リスト（席次・順位は除外）
+            const compareSubjects = useMemo(() => {
+                const isRank = (s) => s.includes('席次') || s.includes('順位');
+                const subSet = new Set();
+                typeExams.forEach(ex => {
+                    records.filter(r => r.examId === ex.id).forEach(r => {
+                        if (r.scores) {
+                            Object.keys(r.scores).forEach(s => {
+                                if (!isRank(s)) subSet.add(s);
+                            });
+                        }
+                    });
+                });
+
+                // デフォルトの主要科目を補完
+                if (examType === 'benesse') {
+                    ['国語点数', '国語偏差値', '数学点数', '数学偏差値', '英語点数', '英語偏差値', '3教科点数', '3教科偏差値'].forEach(s => subSet.add(s));
+                } else if (examType === 'comprehensive') {
+                    ['国語', '社会', '数学', '理科', '英語', '5教科総点', '5教科平均点', '音楽', '美術', '保体', '技家', '9教科総点', '9教科平均点'].forEach(s => subSet.add(s));
+                } else {
+                    ['国語', '社会', '数学', '理科', '英語', '5教科総点', '5教科平均点'].forEach(s => subSet.add(s));
+                }
+
+                const arr = Array.from(subSet);
+                arr.sort((a, b) => {
+                    const idxA = SUBJECT_ORDER.indexOf(a);
+                    const idxB = SUBJECT_ORDER.indexOf(b);
+                    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                    if (idxA !== -1) return -1;
+                    if (idxB !== -1) return 1;
+                    return a.localeCompare(b);
+                });
+                return arr;
+            }, [typeExams, records, examType]);
+
+            // 棒グラフで表示する科目（100点満点系または偏差値系）
+            const barChartSubjects = useMemo(() => {
+                if (examType === 'benesse') {
+                    return ['国語偏差値', '数学偏差値', '英語偏差値', '3教科偏差値'].filter(s => compareSubjects.includes(s));
+                }
+                if (examType === 'comprehensive') {
+                    return ['国語', '社会', '数学', '理科', '英語', '5教科平均点', '音楽', '美術', '保体', '技家', '9教科平均点'].filter(s => compareSubjects.includes(s));
+                }
+                return ['国語', '社会', '数学', '理科', '英語', '5教科平均点'].filter(s => compareSubjects.includes(s));
+            }, [examType, compareSubjects]);
+
+            // 初期試験の自動選択と同期
+            useEffect(() => {
+                if (normExamList.length > 0) {
+                    const exists = normExamList.some(item => item.normName === selectedNormExamName);
+                    if (!selectedNormExamName || !exists) {
+                        const firstNorm = normExamList[0].normName;
+                        const newMap = {};
+                        cohorts.forEach(c => {
+                            const matched = typeExams.find(e => (e.cohortId || cohorts[0]?.id) === c.id && normalizeName(e.name) === firstNorm);
+                            newMap[c.id] = matched ? matched.id : '';
+                        });
+                        setCompareConfig(prev => ({
+                            ...prev,
+                            selectedNormExamName: firstNorm,
+                            customExamMap: newMap,
+                            baseCohortId: prev.baseCohortId || (cohorts[0] ? cohorts[0].id : '')
+                        }));
+                    }
+                }
+            }, [normExamList, examType, cohorts]);
+
+            // 通年推移の科目が現在の種別に無い場合の自動補正
+            useEffect(() => {
+                if (compareSubjects.length > 0 && !compareSubjects.includes(trendSubject)) {
+                    const defaultSub = examType === 'benesse' ? '3教科偏差値' : '5教科平均点';
+                    setCompareConfig(prev => ({
+                        ...prev,
+                        trendSubject: compareSubjects.includes(defaultSub) ? defaultSub : compareSubjects[0]
+                    }));
+                }
+            }, [compareSubjects, trendSubject, examType]);
+
+            // 試験名ボタンをクリックした際に全期生の該当試験を一括セット
+            const handleSelectNormExam = (normName) => {
+                const newMap = {};
+                cohorts.forEach(c => {
+                    const matched = typeExams.find(e => (e.cohortId || cohorts[0]?.id) === c.id && normalizeName(e.name) === normName);
+                    newMap[c.id] = matched ? matched.id : '';
+                });
+                setCompareConfig(prev => ({
+                    ...prev,
+                    selectedNormExamName: normName,
+                    customExamMap: newMap
+                }));
+            };
+
+            // 各期生の試験別データ算出（モード①用）
+            const singleComparisonRows = useMemo(() => {
+                return cohorts.map((cohort, idx) => {
+                    const palette = COHORT_PALETTE[idx % COHORT_PALETTE.length];
+                    const cohortExams = typeExams.filter(e => (e.cohortId || cohorts[0]?.id) === cohort.id);
+                    const targetExamId = customExamMap[cohort.id];
+                    const exam = cohortExams.find(e => e.id === targetExamId) || null;
+                    const stats = exam ? computeExamSummaryStats(exam, records) : null;
+                    return {
+                        cohort,
+                        palette,
+                        cohortExams,
+                        exam,
+                        stats
+                    };
+                });
+            }, [cohorts, typeExams, customExamMap, records]);
+
+            const activeSingleRows = useMemo(() => {
+                return singleComparisonRows.filter(r => r.exam && r.stats && r.stats.totalStudents > 0);
+            }, [singleComparisonRows]);
+
+            const baseRow = useMemo(() => {
+                return activeSingleRows.find(r => r.cohort.id === baseCohortId) || activeSingleRows[0] || null;
+            }, [activeSingleRows, baseCohortId]);
+
+            // 通年推移データ算出（モード②用）
+            const trendAxisItems = useMemo(() => {
+                if (trendAlignMode === 'order') {
+                    let maxCount = 0;
+                    cohorts.forEach(c => {
+                        const cnt = typeExams.filter(e => (e.cohortId || cohorts[0]?.id) === c.id).length;
+                        if (cnt > maxCount) maxCount = cnt;
+                    });
+                    return Array.from({ length: maxCount }, (_, i) => ({
+                        key: `order_${i}`,
+                        label: `第${i + 1}回`,
+                        index: i
+                    }));
+                } else {
+                    return normExamList.map((item, i) => ({
+                        key: item.normName,
+                        label: item.displayName,
+                        normName: item.normName,
+                        index: i
+                    }));
+                }
+            }, [trendAlignMode, cohorts, typeExams, normExamList]);
+
+            const trendSeries = useMemo(() => {
+                return cohorts.map((cohort, idx) => {
+                    const palette = COHORT_PALETTE[idx % COHORT_PALETTE.length];
+                    const cohortExams = typeExams.filter(e => (e.cohortId || cohorts[0]?.id) === cohort.id);
+                    const points = trendAxisItems.map((axisItem) => {
+                        let targetExam = null;
+                        if (trendAlignMode === 'order') {
+                            targetExam = cohortExams[axisItem.index] || null;
+                        } else {
+                            targetExam = cohortExams.find(e => normalizeName(e.name) === axisItem.normName) || null;
+                        }
+                        if (!targetExam) return { axisKey: axisItem.key, val: null, examName: null };
+                        const st = computeExamSummaryStats(targetExam, records);
+                        const val = st && st.averages[trendSubject] !== undefined ? st.averages[trendSubject] : null;
+                        return {
+                            axisKey: axisItem.key,
+                            val,
+                            examName: targetExam.name,
+                            examineeCount: st ? st.examineeCount : 0
+                        };
+                    });
+                    return {
+                        cohort,
+                        palette,
+                        points
+                    };
+                });
+            }, [cohorts, typeExams, trendAxisItems, trendAlignMode, records, trendSubject]);
+
+            const typeTitle = examType === 'regular' ? '定期試験' : (examType === 'benesse' ? '学力推移調査' : '学期総合');
+
+            return (
+                <div className={isPrint ? 'w-full' : 'space-y-5'}>
+                    {/* 印刷用ヘッダー */}
+                    {isPrint && (
+                        <div className="flex items-center justify-between border-b-2 border-slate-800 pb-2 mb-3">
+                            <div>
+                                <h2 className="text-lg font-extrabold text-slate-900">
+                                    過年度比較レポート（{typeTitle} ／ {mode === 'single' ? '試験別 期生間比較' : `通年推移比較：${trendSubject}`}）
+                                </h2>
+                                <p className="text-[10.5px] text-slate-500">
+                                    対象期生: {cohorts.map(c => c.name).join('・')}
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 操作パネル（画面表示時のみ） */}
+                    {!isPrint && (
+                        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200 shadow-sm space-y-3.5">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                {/* 1. 試験種別タブ */}
+                                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
+                                    {[
+                                        { id: 'regular', label: '定期試験', activeCls: 'bg-blue-600 text-white shadow' },
+                                        { id: 'benesse', label: '学力推移調査', activeCls: 'bg-green-600 text-white shadow' },
+                                        { id: 'comprehensive', label: '学期総合', activeCls: 'bg-purple-600 text-white shadow' }
+                                    ].map(t => (
+                                        <button
+                                            key={t.id}
+                                            type="button"
+                                            onClick={() => setCompareConfig(prev => ({ ...prev, examType: t.id, selectedNormExamName: '' }))}
+                                            className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${examType === t.id ? t.activeCls : 'text-slate-600 hover:bg-white/60'}`}
+                                        >
+                                            {t.label}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {/* 2. 比較モード切替 */}
+                                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
+                                    <button
+                                        type="button"
+                                        onClick={() => setCompareConfig(prev => ({ ...prev, mode: 'single' }))}
+                                        className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${mode === 'single' ? 'bg-slate-800 text-white shadow' : 'text-slate-600 hover:bg-white/60'}`}
+                                    >
+                                        📊 試験別で期生間比較（例: 1年1学期中間）
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setCompareConfig(prev => ({ ...prev, mode: 'trend' }))}
+                                        className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${mode === 'trend' ? 'bg-slate-800 text-white shadow' : 'text-slate-600 hover:bg-white/60'}`}
+                                    >
+                                        📈 通年推移を期生間で重ねて比較
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* モード①：試験選択＆期生ごとの試験割り当てバー */}
+                            {mode === 'single' && (
+                                <div className="space-y-3 pt-2 border-t border-slate-100">
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                        <span className="text-xs font-bold text-slate-500 mr-1">比較する試験を一括選択:</span>
+                                        {normExamList.length === 0 ? (
+                                            <span className="text-xs text-slate-400">この種別の試験データがまだ登録されていません</span>
+                                        ) : (
+                                            normExamList.map(item => (
+                                                <button
+                                                    key={item.normName}
+                                                    type="button"
+                                                    onClick={() => handleSelectNormExam(item.normName)}
+                                                    className={`px-3 py-1 rounded-full text-xs font-bold border transition-all ${
+                                                        selectedNormExamName === item.normName
+                                                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                                            : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-blue-50'
+                                                    }`}
+                                                >
+                                                    {item.displayName}
+                                                </button>
+                                            ))
+                                        )}
+                                    </div>
+
+                                    {/* 各期生ごとの比較対象試験ドロップダウン（表記揺れや自由な組み合わせに対応） */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                                        {singleComparisonRows.map(({ cohort, palette, cohortExams, exam }) => (
+                                            <div key={cohort.id} className="bg-white p-2 rounded-lg border border-slate-200 flex flex-col gap-1 shadow-sm">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-slate-800">
+                                                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: palette.color }}></span>
+                                                        {cohort.name}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setCompareConfig(prev => ({ ...prev, baseCohortId: cohort.id }))}
+                                                        className={`text-[10px] px-1.5 py-0.5 rounded font-bold border transition-colors ${
+                                                            (baseRow && baseRow.cohort.id === cohort.id)
+                                                                ? 'bg-amber-100 text-amber-800 border-amber-300'
+                                                                : 'bg-slate-50 text-slate-400 border-slate-200 hover:text-slate-600'
+                                                        }`}
+                                                        title="差分（±）を計算する基準期生に設定します"
+                                                    >
+                                                        {(baseRow && baseRow.cohort.id === cohort.id) ? '★ 比較基準' : '基準にする'}
+                                                    </button>
+                                                </div>
+                                                <select
+                                                    value={exam ? exam.id : ''}
+                                                    onChange={(e) => setCompareConfig(prev => ({
+                                                        ...prev,
+                                                        customExamMap: { ...prev.customExamMap, [cohort.id]: e.target.value }
+                                                    }))}
+                                                    className="w-full text-xs border border-slate-300 rounded px-2 py-1 bg-slate-50 text-slate-700 font-medium outline-none focus:border-blue-500"
+                                                >
+                                                    <option value="">-- 該当なし / 非表示 --</option>
+                                                    {cohortExams.map(ce => (
+                                                        <option key={ce.id} value={ce.id}>{ce.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* モード②：通年推移の科目選択＆横軸揃え方 */}
+                            {mode === 'trend' && (
+                                <div className="space-y-2.5 pt-2 border-t border-slate-100">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                            <span className="text-xs font-bold text-slate-500 mr-1">比較する項目:</span>
+                                            {compareSubjects.map(sub => (
+                                                <button
+                                                    key={sub}
+                                                    type="button"
+                                                    onClick={() => setCompareConfig(prev => ({ ...prev, trendSubject: sub }))}
+                                                    className={`px-2.5 py-1 rounded-full text-xs font-bold border transition-all ${
+                                                        trendSubject === sub
+                                                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                                            : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'
+                                                    }`}
+                                                >
+                                                    {sub}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs">
+                                            <button
+                                                type="button"
+                                                onClick={() => setCompareConfig(prev => ({ ...prev, trendAlignMode: 'name' }))}
+                                                className={`px-2.5 py-1 rounded font-bold transition-colors ${trendAlignMode === 'name' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
+                                            >
+                                                試験名で揃える
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setCompareConfig(prev => ({ ...prev, trendAlignMode: 'order' }))}
+                                                className={`px-2.5 py-1 rounded font-bold transition-colors ${trendAlignMode === 'order' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
+                                            >
+                                                回数順（第1回・第2回…）で揃える
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {}
+                    {/* --- モード①：試験別の期生間比較表示 --- */}
+                    {mode === 'single' && (
+                        <div className="space-y-4">
+                            {/* 1. 期生別 平均点・比較一覧表 */}
+                            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                                <div className="px-4 py-2.5 bg-slate-800 text-white flex flex-wrap justify-between items-center gap-2">
+                                    <span className="text-xs sm:text-sm font-bold flex items-center gap-2">
+                                        📊 期生別 平均点・受験者数 比較テーブル
+                                    </span>
+                                    {baseRow && (
+                                        <span className="text-[11px] text-amber-300 font-bold">
+                                            ★ 括弧内の数値は基準「{baseRow.cohort.name}（{baseRow.exam?.name}）」との差
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="report-table w-full text-xs text-center whitespace-nowrap border-separate border-spacing-0">
+                                        <thead className="bg-slate-100 text-slate-600">
+                                            <tr>
+                                                <th className="px-3 py-2 text-left font-bold border-b border-slate-200 sticky left-0 bg-slate-100 z-20 min-w-[95px]">期生</th>
+                                                <th className="px-3 py-2 text-left font-bold border-b border-slate-200 min-w-[120px]">対象試験名</th>
+                                                <th className="px-2 py-2 font-bold border-b border-slate-200 min-w-[68px]">受験者数</th>
+                                                {compareSubjects.map(sub => (
+                                                    <th key={sub} className="px-2 py-2 font-bold border-b border-slate-200 min-w-[74px]">{sub}</th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {activeSingleRows.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan={compareSubjects.length + 3} className="py-8 text-slate-400 text-center">
+                                                        比較対象の試験データがある期生がありません。上の選択欄から各期生の試験を選択してください。
+                                                    </td>
+                                                </tr>
+                                            ) : (
+                                                activeSingleRows.map(row => {
+                                                    const isBase = baseRow && baseRow.cohort.id === row.cohort.id;
+                                                    return (
+                                                        <tr key={row.cohort.id} className={`${isBase ? 'bg-amber-50/40' : 'hover:bg-slate-50'} transition-colors`}>
+                                                            <td className="px-3 py-2.5 text-left font-extrabold sticky left-0 bg-white z-10 border-b border-slate-100">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: row.palette.color }}></span>
+                                                                    <span className="text-slate-800 text-[13px]">{row.cohort.name}</span>
+                                                                    {isBase && <span className="text-[9.5px] bg-amber-400 text-slate-900 px-1.5 py-0.5 rounded font-extrabold">基準</span>}
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-3 py-2.5 text-left font-bold text-slate-600 border-b border-slate-100">
+                                                                {row.exam.name}
+                                                            </td>
+                                                            <td className="px-2 py-2.5 font-mono font-bold text-slate-700 border-b border-slate-100 border-r">
+                                                                {row.stats.examineeCount}名
+                                                            </td>
+                                                            {compareSubjects.map(sub => {
+                                                                const val = row.stats.averages[sub];
+                                                                const baseVal = baseRow && baseRow.stats ? baseRow.stats.averages[sub] : undefined;
+                                                                const diff = (!isBase && val !== undefined && baseVal !== undefined) ? (val - baseVal) : null;
+                                                                return (
+                                                                    <td key={sub} className="px-2 py-2 border-b border-l border-slate-100">
+                                                                        <div className="flex flex-col items-center justify-center leading-tight">
+                                                                            <span className="text-[13.5px] font-extrabold text-slate-800 font-mono">
+                                                                                {val !== undefined ? Number(val).toFixed(1) : '-'}
+                                                                            </span>
+                                                                            {diff !== null && (
+                                                                                <span className={`text-[10.5px] font-bold mt-0.5 ${diff > 0.04 ? 'text-blue-600' : (diff < -0.04 ? 'text-red-500' : 'text-slate-400')}`}>
+                                                                                    ({diff > 0 ? `+${diff.toFixed(1)}` : diff.toFixed(1)})
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    </td>
+                                                                );
+                                                            })}
+                                                        </tr>
+                                                    );
+                                                })
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            {/* 2. 期生別 教科ごと平均点（偏差値）グループ棒グラフ */}
+                            {activeSingleRows.length > 0 && barChartSubjects.length > 0 && (() => {
+                                const isDev = examType === 'benesse';
+                                const minY = isDev ? 30 : 0;
+                                const maxY = isDev ? 80 : 100;
+                                const ticks = isDev ? [30, 40, 50, 60, 70, 80] : [0, 20, 40, 60, 80, 100];
+                                const svgW = 780;
+                                const svgH = isPrint ? 250 : 280;
+                                const padL = 44;
+                                const padR = 24;
+                                const padT = 26;
+                                const padB = 42;
+                                const plotW = svgW - padL - padR;
+                                const plotH = svgH - padT - padB;
+                                const groupCount = barChartSubjects.length;
+                                const groupW = plotW / groupCount;
+                                const cohortCount = activeSingleRows.length;
+                                const barW = Math.min(28, Math.max(10, (groupW * 0.72) / cohortCount));
+
+                                const getY = (v) => {
+                                    const clamped = Math.max(minY, Math.min(maxY, v));
+                                    return padT + plotH - ((clamped - minY) / (maxY - minY)) * plotH;
+                                };
+
+                                return (
+                                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3 sm:p-4">
+                                        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                                            <h4 className="text-xs sm:text-sm font-bold text-slate-700">
+                                                📈 教科別 期生間比較グラフ（{isDev ? '平均偏差値' : '平均点'}）
+                                            </h4>
+                                            <div className="flex flex-wrap items-center gap-3">
+                                                {activeSingleRows.map(r => (
+                                                    <span key={r.cohort.id} className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700">
+                                                        <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: r.palette.color }}></span>
+                                                        {r.cohort.name}（{r.exam.name}）
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div className="overflow-x-auto">
+                                            <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full h-auto min-w-[500px] select-none">
+                                                {ticks.map(t => {
+                                                    const y = getY(t);
+                                                    return (
+                                                        <g key={t}>
+                                                            <line x1={padL} y1={y} x2={svgW - padR} y2={y} stroke={t === 50 && isDev ? '#94a3b8' : '#e2e8f0'} strokeWidth="1" strokeDasharray={t === 50 && isDev ? '4 3' : 'none'} />
+                                                            <text x={padL - 8} y={y + 4} textAnchor="end" fontSize="11" fill="#64748b">{t}</text>
+                                                        </g>
+                                                    );
+                                                })}
+                                                {barChartSubjects.map((sub, gIdx) => {
+                                                    const centerX = padL + gIdx * groupW + groupW / 2;
+                                                    const totalBarsW = cohortCount * barW + (cohortCount - 1) * 3;
+                                                    const startX = centerX - totalBarsW / 2;
+                                                    return (
+                                                        <g key={sub}>
+                                                            {activeSingleRows.map((row, cIdx) => {
+                                                                const val = row.stats.averages[sub];
+                                                                if (val === undefined || val === null) return null;
+                                                                const x = startX + cIdx * (barW + 3);
+                                                                const y = getY(val);
+                                                                const h = Math.max(2, padT + plotH - y);
+                                                                return (
+                                                                    <g key={row.cohort.id}>
+                                                                        <rect x={x} y={y} width={barW} height={h} rx="3" fill={row.palette.color} opacity="0.9" />
+                                                                        <text
+                                                                            x={x + barW / 2}
+                                                                            y={y - 5}
+                                                                            textAnchor="middle"
+                                                                            fontSize={cohortCount >= 4 ? '9' : '10'}
+                                                                            fontWeight="bold"
+                                                                            fill={row.palette.color}
+                                                                        >
+                                                                            {Number(val).toFixed(1)}
+                                                                        </text>
+                                                                    </g>
+                                                                );
+                                                            })}
+                                                            <text x={centerX} y={svgH - padB + 20} textAnchor="middle" fontSize="11.5" fontWeight="bold" fill="#334155">
+                                                                {sub}
+                                                            </text>
+                                                        </g>
+                                                    );
+                                                })}
+                                            </svg>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                    )}
+
+                    {}
+                    {/* --- モード②：通年推移の期生間比較表示 --- */}
+                    {mode === 'trend' && (
+                        <div className="space-y-4">
+                            {/* 1. 通年推移 折れ線グラフ */}
+                            {(() => {
+                                const isDev = trendSubject.includes('偏差値');
+                                const isTotal5 = trendSubject === '5教科総点';
+                                const isTotal9 = trendSubject === '9教科総点';
+                                const isTotal3 = trendSubject === '3教科点数';
+
+                                let minY = 0, maxY = 100, step = 20;
+                                if (isDev) { minY = 30; maxY = 80; step = 10; }
+                                else if (isTotal5) { minY = 100; maxY = 450; step = 50; }
+                                else if (isTotal9) { minY = 200; maxY = 850; step = 100; }
+                                else if (isTotal3) { minY = 50; maxY = 300; step = 50; }
+
+                                const ticks = [];
+                                for (let t = minY; t <= maxY; t += step) ticks.push(t);
+
+                                const svgW = 780;
+                                const svgH = isPrint ? 260 : 295;
+                                const padL = 48;
+                                const padR = 26;
+                                const padT = 26;
+                                const padB = 50;
+                                const plotW = svgW - padL - padR;
+                                const plotH = svgH - padT - padB;
+                                const count = trendAxisItems.length;
+
+                                const getX = (i) => {
+                                    if (count <= 1) return padL + plotW / 2;
+                                    const offset = count <= 6 ? 48 : 34;
+                                    return padL + offset + (i / (count - 1)) * (plotW - offset * 2);
+                                };
+                                const getY = (v) => {
+                                    const clamped = Math.max(minY, Math.min(maxY, v));
+                                    return padT + plotH - ((clamped - minY) / (maxY - minY || 1)) * plotH;
+                                };
+
+                                return (
+                                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3 sm:p-4">
+                                        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                                            <h4 className="text-xs sm:text-sm font-bold text-slate-700">
+                                                📈 期生間 通年推移グラフ：【{trendSubject}】（各期生の全体平均推移）
+                                            </h4>
+                                            <div className="flex flex-wrap items-center gap-3">
+                                                {trendSeries.map(s => (
+                                                    <span key={s.cohort.id} className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700">
+                                                        <span className="w-3 h-3 rounded-full" style={{ backgroundColor: s.palette.color }}></span>
+                                                        {s.cohort.name}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        {count === 0 ? (
+                                            <div className="py-10 text-center text-slate-400 text-xs">試験データがありません</div>
+                                        ) : (
+                                            <div className="overflow-x-auto">
+                                                <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full h-auto min-w-[500px] select-none">
+                                                    {ticks.map(t => {
+                                                        const y = getY(t);
+                                                        return (
+                                                            <g key={t}>
+                                                                <line x1={padL} y1={y} x2={svgW - padR} y2={y} stroke="#e2e8f0" strokeWidth="1" />
+                                                                <text x={padL - 8} y={y + 4} textAnchor="end" fontSize="11" fill="#64748b">{t}</text>
+                                                            </g>
+                                                        );
+                                                    })}
+                                                    {trendAxisItems.map((item, i) => {
+                                                        const x = getX(i);
+                                                        return (
+                                                            <g key={item.key}>
+                                                                <line x1={x} y1={padT} x2={x} y2={svgH - padB} stroke="#f1f5f9" strokeWidth="1" />
+                                                                <text x={x} y={svgH - padB + 20} textAnchor="middle" fontSize="10.5" fontWeight="bold" fill="#334155">
+                                                                    {item.label}
+                                                                </text>
+                                                            </g>
+                                                        );
+                                                    })}
+                                                    {trendSeries.map((series, sIdx) => {
+                                                        const validPts = [];
+                                                        series.points.forEach((pt, i) => {
+                                                            if (pt.val !== null && pt.val !== undefined) {
+                                                                validPts.push({ x: getX(i), y: getY(pt.val), val: pt.val, idx: i });
+                                                            }
+                                                        });
+                                                        if (validPts.length === 0) return null;
+                                                        const pathD = validPts.map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+                                                        return (
+                                                            <g key={series.cohort.id}>
+                                                                {validPts.length > 1 && (
+                                                                    <path d={pathD} fill="none" stroke={series.palette.color} strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+                                                                )}
+                                                                {validPts.map((p, idx) => (
+                                                                    <g key={idx}>
+                                                                        <circle cx={p.x} cy={p.y} r="4.5" fill={series.palette.color} stroke="#fff" strokeWidth="1.8" />
+                                                                        <text
+                                                                            x={p.x}
+                                                                            y={p.y - 8 - (sIdx % 2) * 4}
+                                                                            textAnchor="middle"
+                                                                            fontSize="10.5"
+                                                                            fontWeight="bold"
+                                                                            fill={series.palette.color}
+                                                                            stroke="#ffffff"
+                                                                            strokeWidth="3"
+                                                                            style={{ paintOrder: 'stroke' }}
+                                                                        >
+                                                                            {Number(p.val).toFixed(1)}
+                                                                        </text>
+                                                                    </g>
+                                                                ))}
+                                                            </g>
+                                                        );
+                                                    })}
+                                                </svg>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })()}
+
+                            {/* 2. 通年推移 マトリクス表 */}
+                            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                                <div className="px-4 py-2.5 bg-slate-800 text-white flex justify-between items-center">
+                                    <span className="text-xs sm:text-sm font-bold">
+                                        📋 【{trendSubject}】期生別・試験別 平均推移一覧表
+                                    </span>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="report-table w-full text-xs text-center whitespace-nowrap border-separate border-spacing-0">
+                                        <thead className="bg-slate-100 text-slate-600">
+                                            <tr>
+                                                <th className="px-3 py-2 text-left font-bold border-b border-slate-200 sticky left-0 bg-slate-100 z-10 min-w-[95px]">期生</th>
+                                                {trendAxisItems.map(item => (
+                                                    <th key={item.key} className="px-2.5 py-2 font-bold border-b border-slate-200 min-w-[90px]">{item.label}</th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {trendSeries.map(series => (
+                                                <tr key={series.cohort.id} className="hover:bg-slate-50">
+                                                    <td className="px-3 py-2.5 text-left font-extrabold sticky left-0 bg-white z-10 border-b border-slate-100">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: series.palette.color }}></span>
+                                                            <span className="text-slate-800">{series.cohort.name}</span>
+                                                        </div>
+                                                    </td>
+                                                    {series.points.map(pt => (
+                                                        <td key={pt.axisKey} className="px-2.5 py-2 border-b border-l border-slate-100">
+                                                            {pt.val !== null ? (
+                                                                <div className="flex flex-col items-center">
+                                                                    <span className="text-[13px] font-extrabold text-slate-800 font-mono">
+                                                                        {Number(pt.val).toFixed(1)}
+                                                                    </span>
+                                                                    {trendAlignMode === 'order' && pt.examName && (
+                                                                        <span className="text-[9.5px] text-slate-400 truncate max-w-[85px]">{pt.examName}</span>
+                                                                    )}
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-slate-300">-</span>
+                                                            )}
+                                                        </td>
+                                                    ))}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
 
         // --- ランキング表セクション表示コンポーネント（画面＆印刷共用） ---
         const RankingSectionView = ({ section, isPrint = false, onSelectStudent = null }) => {
@@ -760,7 +1542,7 @@
             // 順位バッジのスタイル
             const renderRankBadge = (rank) => {
                 if (!rank) return <span className="text-slate-300">-</span>;
-                const badgeSize = isPrint ? 'w-[18px] h-[18px] text-[10.5px]' : 'w-5 h-5 text-[11px]';
+                const badgeSize = isPrint ? 'w-[17px] h-[17px] text-[10px]' : 'w-[18px] h-[18px] text-[10.5px]';
                 if (rank === 1) {
                     return <span className={`inline-flex items-center justify-center rounded-full bg-amber-400 text-slate-900 font-extrabold shadow-sm ${badgeSize}`}>1</span>;
                 }
@@ -770,10 +1552,10 @@
                 if (rank === 3) {
                     return <span className={`inline-flex items-center justify-center rounded-full bg-amber-700/80 text-white font-extrabold shadow-sm ${badgeSize}`}>3</span>;
                 }
-                return <span className="font-bold text-slate-500 text-[11px]">{rank}</span>;
+                return <span className="font-bold text-slate-500 text-[10.5px]">{rank}</span>;
             };
 
-            // 氏名が長い生徒でも見切れずにフルネームで収まるよう文字サイズと横幅倍率を自動調整する関数
+            // 氏名が長い生徒（5文字以上など）でも見切れずにフルネームで収まるよう文字サイズと横幅倍率を自動調整する関数
             const renderFittedName = (rawName) => {
                 if (!rawName) return <span className="text-slate-300">-</span>;
                 const parts = rawName.trim().split(/[\s　]+/);
@@ -781,24 +1563,29 @@
                 const len = pureChars.length;
                 const hasSpace = parts.length > 1;
 
-                // カラム数に応じて氏名欄が使える目安の横幅(px)
-                const availW = colCount >= 6 ? (isPrint ? 65 : 68) : (colCount === 5 ? 82 : 86);
-                // 姓名間のスペース幅（文字数が多い場合は隙間を狭くして文字サイズを確保）
-                const spacePx = hasSpace ? (len >= 5 ? 2 : 3.5) : 0;
-                const baseFontSize = isPrint ? (colCount >= 6 ? 12 : 12.5) : 12;
+                // カラム数に応じて氏名欄に確実に収まる基準幅(px)を設定（4文字がジャスト収まる幅を基準化）
+                const availW = colCount >= 6 ? 47 : (colCount === 5 ? 62 : 72);
+                // 姓名間のスペース幅（5文字以上は隙間を最小限にして文字領域を確保）
+                const spacePx = hasSpace ? (len >= 5 ? 1.5 : 3) : 0;
+                const baseFontSize = colCount >= 6 ? 11.5 : 12;
 
-                const estimatedW = len * baseFontSize + spacePx;
                 let fontSize = baseFontSize;
                 let scaleX = 1;
                 let letterSpacing = '0px';
 
-                if (estimatedW > availW) {
-                    const ratio = availW / estimatedW;
-                    fontSize = Math.max(9.5, Math.floor(baseFontSize * Math.max(0.82, ratio) * 10) / 10);
-                    const afterFontW = len * fontSize + spacePx;
+                if (len >= 5) {
+                    // 5文字以上は文字数に応じてフォントサイズと横幅倍率を確実に縮小して見切れを防止
+                    fontSize = colCount >= 6 ? (len === 5 ? 10.2 : 9.5) : (len === 5 ? 11 : 10);
+                    letterSpacing = '-0.3px';
+                    const charW = fontSize - 0.3;
+                    const afterFontW = len * charW + spacePx;
                     if (afterFontW > availW) {
-                        scaleX = Math.max(0.62, Number((availW / afterFontW).toFixed(2)));
-                        letterSpacing = '-0.3px';
+                        scaleX = Math.max(0.55, Number((availW / afterFontW).toFixed(2)));
+                    }
+                } else {
+                    const estimatedW = len * baseFontSize + spacePx;
+                    if (estimatedW > availW) {
+                        scaleX = Math.max(0.75, Number((availW / estimatedW).toFixed(2)));
                     }
                 }
 
@@ -859,17 +1646,18 @@
                                         {col.label}
                                     </div>
 
+                                    {}
                                     {/* カラムサブヘッダー */}
-                                    <div className="flex items-center bg-slate-100 text-slate-600 text-[10px] font-bold py-1 px-1 border-b border-slate-200">
-                                        <div className="w-[20px] shrink-0 text-center">順</div>
-                                        <div className="flex-1 min-w-0 text-left pl-1">氏名</div>
+                                    <div className="flex items-center bg-slate-100 text-slate-600 text-[10px] font-bold py-1 px-0.5 border-b border-slate-200">
+                                        <div className="w-[18px] shrink-0 text-center">順</div>
+                                        <div className="flex-1 min-w-0 text-left pl-0.5">氏名</div>
                                         {section.isBenesse ? (
                                             <>
-                                                <div className="w-[26px] shrink-0 text-right">点数</div>
-                                                <div className="w-[34px] shrink-0 text-right pr-0.5">偏差値</div>
+                                                <div className="w-[25px] shrink-0 text-right">点数</div>
+                                                <div className="w-[32px] shrink-0 text-right pr-0.5">偏差値</div>
                                             </>
                                         ) : (
-                                            <div className="w-[28px] shrink-0 text-right pr-0.5">点数</div>
+                                            <div className="w-[25px] shrink-0 text-right pr-0.5">点数</div>
                                         )}
                                     </div>
 
@@ -885,9 +1673,9 @@
                                                     <div
                                                         key={rowIdx}
                                                         style={rowStyle}
-                                                        className={`flex items-center px-1 ${isPrint ? '' : 'py-1.5'} text-[11px] ${isEven ? 'bg-slate-50/50' : 'bg-white'}`}
+                                                        className={`flex items-center px-0.5 ${isPrint ? '' : 'py-1.5'} text-[11px] ${isEven ? 'bg-slate-50/50' : 'bg-white'}`}
                                                     >
-                                                        <div className="w-[20px] shrink-0 text-center text-slate-300 text-[10px]">{rowIdx + 1}</div>
+                                                        <div className="w-[18px] shrink-0 text-center text-slate-300 text-[10px]">{rowIdx + 1}</div>
                                                         <div className="flex-1 text-center text-slate-300 text-[10px]">-</div>
                                                     </div>
                                                 );
@@ -899,28 +1687,28 @@
                                                     key={`${item.studentId}_${rowIdx}`}
                                                     style={rowStyle}
                                                     onClick={() => !isPrint && onSelectStudent && onSelectStudent(item.studentId)}
-                                                    className={`flex items-center px-1 ${isPrint ? '' : 'py-1.5'} text-[11.5px] transition-colors ${
+                                                    className={`flex items-center px-0.5 ${isPrint ? '' : 'py-1.5'} text-[11.5px] transition-colors ${
                                                         !isPrint && onSelectStudent ? 'cursor-pointer hover:bg-blue-50' : ''
                                                     } ${isTop3 ? 'bg-amber-50/40' : (isEven ? 'bg-slate-50/60' : 'bg-white')}`}
                                                     title={!isPrint ? `${item.grade}-${item.class}-${item.no} ${item.rawName} (クリックで個人成績へ)` : ''}
                                                 >
-                                                    <div className="w-[20px] shrink-0 flex justify-center items-center">
+                                                    <div className="w-[18px] shrink-0 flex justify-center items-center">
                                                         {renderRankBadge(item.rank)}
                                                     </div>
-                                                    <div className="flex-1 min-w-0 text-left pl-1 pr-0.5 overflow-hidden">
+                                                    <div className="flex-1 min-w-0 text-left pl-0.5 pr-0.5 overflow-hidden">
                                                         {renderFittedName(item.rawName)}
                                                     </div>
                                                     {section.isBenesse ? (
                                                         <>
-                                                            <div className="w-[26px] shrink-0 text-right font-extrabold text-slate-800 font-mono text-[11.5px]">
+                                                            <div className="w-[25px] shrink-0 text-right font-extrabold text-slate-800 font-mono text-[11px] tracking-tighter">
                                                                 {Math.round(item.score)}
                                                             </div>
-                                                            <div className="w-[34px] shrink-0 text-right pr-0.5 font-extrabold text-emerald-700 font-mono text-[11px]">
+                                                            <div className="w-[32px] shrink-0 text-right pr-0.5 font-extrabold text-emerald-700 font-mono text-[10.5px] tracking-tighter">
                                                                 {item.dev !== null ? Number(item.dev).toFixed(1) : '-'}
                                                             </div>
                                                         </>
                                                     ) : (
-                                                        <div className={`w-[28px] shrink-0 text-right pr-0.5 font-extrabold font-mono ${col.isTotal ? 'text-blue-700 text-[12px]' : 'text-slate-900 text-[12px]'}`}>
+                                                        <div className={`w-[25px] shrink-0 text-right pr-0.5 font-extrabold font-mono tracking-tighter ${col.isTotal ? 'text-blue-700 text-[11.5px]' : 'text-slate-900 text-[11.5px]'}`}>
                                                             {Math.round(item.score)}
                                                         </div>
                                                     )}
@@ -965,8 +1753,29 @@
 
         // --- Main Application Component ---
         const App = () => {
+            // Cohort State (v5.0: 複数期生の管理)
+            const [cohorts, setCohorts] = useState([{ id: 'cohort_default', name: '29期生', order: 0 }]);
+            const [selectedCohortId, setSelectedCohortId] = useState('cohort_default');
+            const [isCohortModalOpen, setIsCohortModalOpen] = useState(false);
+            const [newCohortNameInput, setNewCohortNameInput] = useState('');
+            const [editingCohortId, setEditingCohortId] = useState(null);
+            const [editingCohortName, setEditingCohortName] = useState('');
+            const [confirmDeleteCohortId, setConfirmDeleteCohortId] = useState(null);
+
+            // Cross-Cohort Comparison State (v5.0: 過年度比較 パターンA)
+            const [isCohortCompareOpen, setIsCohortCompareOpen] = useState(false);
+            const [compareConfig, setCompareConfig] = useState({
+                examType: 'regular',
+                mode: 'single',
+                selectedNormExamName: '',
+                customExamMap: {},
+                baseCohortId: 'cohort_default',
+                trendSubject: '5教科平均点',
+                trendAlignMode: 'name'
+            });
+
             // State
-            const [exams, setExams] = useState([]); // [{ id, name, type, order }]
+            const [exams, setExams] = useState([]); // [{ id, name, type, order, cohortId }]
             const [records, setRecords] = useState([]); // [{ examId, studentId, rawName, grade, class, no, scholarship, scores: {} }]
             const [activeTab, setActiveTab] = useState('regular'); // 'regular' or 'benesse' or 'comprehensive'
             const [selectedExamId, setSelectedExamId] = useState(null);
@@ -979,9 +1788,9 @@
             const [isSidebarOpen, setIsSidebarOpen] = useState(true);
             const fileInputRef = useRef(null);
 
-            // Print State (v4.0)
+            // Print State (v4.0 / v5.0)
             const [isPrinting, setIsPrinting] = useState(false);
-            const [printModeType, setPrintModeType] = useState('report'); // 'report' or 'ranking'
+            const [printModeType, setPrintModeType] = useState('report'); // 'report' | 'ranking' | 'cohort_compare'
             const [printTargetIds, setPrintTargetIds] = useState([]); 
             const [printTargetTypes, setPrintTargetTypes] = useState({ regular: true, benesse: true, comprehensive: true });
             const [printIncludeCharts, setPrintIncludeCharts] = useState(true);
@@ -1015,10 +1824,35 @@
 
             // Load data from localStorage
             useEffect(() => {
+                let loadedCohorts = [{ id: 'cohort_default', name: '29期生', order: 0 }];
+                try {
+                    const savedCohorts = localStorage.getItem('blend_cohorts');
+                    if (savedCohorts) {
+                        const parsed = JSON.parse(savedCohorts);
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                            loadedCohorts = parsed;
+                        }
+                    }
+                    setCohorts(loadedCohorts);
+
+                    const savedSelectedCohort = localStorage.getItem('blend_selected_cohort_id');
+                    if (savedSelectedCohort && loadedCohorts.some(c => c.id === savedSelectedCohort)) {
+                        setSelectedCohortId(savedSelectedCohort);
+                    } else {
+                        setSelectedCohortId(loadedCohorts[0].id);
+                    }
+                } catch(e) { console.error("Error parsing cohorts from local storage", e); }
+
+                const fallbackCohortId = loadedCohorts[0].id;
+
                 try {
                     const savedExams = localStorage.getItem('blend_exams');
                     if (savedExams) {
-                        const parsedExams = JSON.parse(savedExams).map(e => ({...e, type: e.type || 'regular'}));
+                        const parsedExams = JSON.parse(savedExams).map(e => ({
+                            ...e,
+                            type: e.type || 'regular',
+                            cohortId: e.cohortId || fallbackCohortId
+                        }));
                         setExams(parsedExams);
                     }
                 } catch(e) { console.error("Error parsing exams from local storage", e); }
@@ -1043,9 +1877,11 @@
 
             // Save basic data to localStorage when changed
             useEffect(() => {
+                localStorage.setItem('blend_cohorts', JSON.stringify(cohorts));
+                localStorage.setItem('blend_selected_cohort_id', selectedCohortId || '');
                 localStorage.setItem('blend_exams', JSON.stringify(exams));
                 localStorage.setItem('blend_records', JSON.stringify(records));
-            }, [exams, records]);
+            }, [cohorts, selectedCohortId, exams, records]);
 
             // Save settings to localStorage when changed
             useEffect(() => {
@@ -1054,10 +1890,21 @@
                 localStorage.setItem('blend_sync_id', syncId);
             }, [firebaseConfig, isFirebaseEnabled, syncId]);
 
-            // Filter exams based on active tab
+            // 現在選択中の期生のオブジェクト
+            const currentCohort = useMemo(() => {
+                return cohorts.find(c => c.id === selectedCohortId) || cohorts[0] || { id: 'cohort_default', name: '29期生' };
+            }, [cohorts, selectedCohortId]);
+
+            // 現在選択中の期生に属する試験一覧
+            const currentCohortExams = useMemo(() => {
+                const defaultId = cohorts[0] ? cohorts[0].id : 'cohort_default';
+                return exams.filter(e => (e.cohortId || defaultId) === currentCohort.id);
+            }, [exams, currentCohort, cohorts]);
+
+            // Filter exams based on active tab and current cohort
             const currentExams = useMemo(() => {
-                return exams.filter(e => (e.type || 'regular') === activeTab);
-            }, [exams, activeTab]);
+                return currentCohortExams.filter(e => (e.type || 'regular') === activeTab);
+            }, [currentCohortExams, activeTab]);
 
             // Set initial selected exam when tab changes or exam list updates
             useEffect(() => {
@@ -1076,6 +1923,57 @@
                     setSelectedExamId(null);
                 }
             }, [currentExams, selectedExamId]);
+
+            // --- Cohort Management Handlers ---
+            const handleAddCohort = (e) => {
+                if (e) e.preventDefault();
+                const trimmed = newCohortNameInput.trim();
+                if (!trimmed) return;
+                const newId = 'cohort_' + generateId();
+                const newCohort = { id: newId, name: trimmed, order: cohorts.length };
+                setCohorts([...cohorts, newCohort]);
+                setSelectedCohortId(newId);
+                setSelectedStudentId(null);
+                setNewCohortNameInput('');
+            };
+
+            const handleSaveCohortName = (id) => {
+                const trimmed = editingCohortName.trim();
+                if (!trimmed) return;
+                setCohorts(cohorts.map(c => c.id === id ? { ...c, name: trimmed } : c));
+                setEditingCohortId(null);
+                setEditingCohortName('');
+            };
+
+            const handleMoveCohort = (index, direction) => {
+                const targetIndex = direction === 'up' ? index - 1 : index + 1;
+                if (targetIndex < 0 || targetIndex >= cohorts.length) return;
+                const updated = [...cohorts];
+                const temp = updated[index];
+                updated[index] = updated[targetIndex];
+                updated[targetIndex] = temp;
+                setCohorts(updated.map((c, i) => ({ ...c, order: i })));
+            };
+
+            const handleDeleteCohort = (id) => {
+                if (cohorts.length <= 1) return;
+                const defaultId = cohorts[0].id;
+                const examIdsToRemove = new Set(
+                    exams.filter(e => (e.cohortId || defaultId) === id).map(e => e.id)
+                );
+                const remainingCohorts = cohorts.filter(c => c.id !== id).map((c, i) => ({ ...c, order: i }));
+                const remainingExams = exams.filter(e => !examIdsToRemove.has(e.id));
+                const remainingRecords = records.filter(r => !examIdsToRemove.has(r.examId));
+
+                setCohorts(remainingCohorts);
+                setExams(remainingExams);
+                setRecords(remainingRecords);
+                setConfirmDeleteCohortId(null);
+                if (selectedCohortId === id) {
+                    setSelectedCohortId(remainingCohorts[0].id);
+                    setSelectedStudentId(null);
+                }
+            };
 
             // --- Handlers ---
             const handleImportCSV = (e) => {
@@ -1155,7 +2053,13 @@
                 }
 
                 const newExamId = generateId();
-                const newExam = { id: newExamId, name: examName, order: exams.length, type: examType };
+                const newExam = {
+                    id: newExamId,
+                    name: examName,
+                    order: exams.length,
+                    type: examType,
+                    cohortId: currentCohort.id
+                };
                 
                 const newRecords = [];
 
@@ -1368,11 +2272,12 @@
                 try {
                     const db = getFirebaseDb();
                     await db.collection('blend_sync_data').doc(syncId).set({
+                        cohorts,
                         exams,
                         records,
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                     });
-                    alert(`Sync ID: [${syncId}] にデータを保存(上書き)しました。`);
+                    alert(`Sync ID: [${syncId}] に全期生のデータを保存(上書き)しました。`);
                 } catch (error) {
                     console.error(error);
                     alert('保存に失敗しました。\n\n詳細: ' + error.message);
@@ -1387,10 +2292,18 @@
                     const doc = await db.collection('blend_sync_data').doc(syncId).get();
                     if (doc.exists) {
                         const data = doc.data();
-                        setExams(data.exams || []);
-                        
+                        const loadedCohorts = (Array.isArray(data.cohorts) && data.cohorts.length > 0)
+                            ? data.cohorts
+                            : [{ id: 'cohort_default', name: '29期生', order: 0 }];
+                        const fallbackId = loadedCohorts[0].id;
+                        setCohorts(loadedCohorts);
+                        setSelectedCohortId(fallbackId);
+                        setExams((data.exams || []).map(ex => ({
+                            ...ex,
+                            type: ex.type || 'regular',
+                            cohortId: ex.cohortId || fallbackId
+                        })));
                         setRecords(migrateRecords(data.records || []));
-                        
                         alert('クラウドからデータを取得しました。');
                     } else {
                         alert('指定されたSync IDのデータが見つかりません。');
@@ -1402,7 +2315,7 @@
             };
 
             const handleJsonExport = () => {
-                const data = { exams, records };
+                const data = { cohorts, exams, records };
                 const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement('a');
@@ -1425,7 +2338,17 @@
                     try {
                         const data = JSON.parse(event.target.result);
                         if (data.exams !== undefined && data.records !== undefined) {
-                            setExams(data.exams.map(ex => ({...ex, type: ex.type || 'regular'})));
+                            const loadedCohorts = (Array.isArray(data.cohorts) && data.cohorts.length > 0)
+                                ? data.cohorts
+                                : [{ id: 'cohort_default', name: '29期生', order: 0 }];
+                            const fallbackId = loadedCohorts[0].id;
+                            setCohorts(loadedCohorts);
+                            setSelectedCohortId(fallbackId);
+                            setExams(data.exams.map(ex => ({
+                                ...ex,
+                                type: ex.type || 'regular',
+                                cohortId: ex.cohortId || fallbackId
+                            })));
                             setRecords(migrateRecords(data.records));
                             alert('JSONファイルからデータを復元しました。');
                         } else {
@@ -1609,7 +2532,7 @@
                 const tabTypes = ['regular', 'benesse', 'comprehensive'];
 
                 tabTypes.forEach(type => {
-                    const typeExams = exams.filter(e => (e.type || 'regular') === type);
+                    const typeExams = currentCohortExams.filter(e => (e.type || 'regular') === type);
                     if (typeExams.length === 0) return;
 
                     const typeRecords = records.filter(r => typeExams.some(e => e.id === r.examId));
@@ -1976,6 +2899,15 @@
                 }, 500);
             };
 
+            const triggerPrintCohortCompare = () => {
+                setPrintModeType('cohort_compare');
+                setIsPrinting(true);
+                setTimeout(() => {
+                    window.print();
+                    setIsPrinting(false);
+                }, 500);
+            };
+
             const executePrintFromSettings = () => {
                 let targets = [];
                 if (printConfig.mode === 'all') {
@@ -2156,7 +3088,60 @@
                                 <div className="bg-blue-600 p-2 rounded-lg shrink-0">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                                 </div>
-                                <h1 className="text-xl font-bold tracking-wider hidden sm:block whitespace-nowrap">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-2">v4.4</span></h1>
+                                <h1 className="text-xl font-bold tracking-wider hidden lg:block whitespace-nowrap">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-1">v5.0</span></h1>
+
+                                {}
+                                {/* 期生（学年）クイック切替＆管理バー */}
+                                <div className="flex items-center bg-slate-800 rounded-lg p-1 border border-slate-700 gap-1 ml-1">
+                                    <div className="flex items-center gap-1 overflow-x-auto max-w-[200px] sm:max-w-[320px] no-scrollbar">
+                                        {cohorts.map((c, idx) => {
+                                            const active = c.id === currentCohort.id;
+                                            return (
+                                                <button
+                                                    key={c.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setSelectedCohortId(c.id);
+                                                        setSelectedStudentId(null);
+                                                    }}
+                                                    className={`px-2.5 py-1 rounded text-xs font-extrabold whitespace-nowrap transition-all ${
+                                                        active
+                                                            ? 'bg-blue-600 text-white shadow-sm'
+                                                            : 'text-slate-300 hover:text-white hover:bg-slate-700'
+                                                    }`}
+                                                >
+                                                    {c.name}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsCohortModalOpen(true)}
+                                        className="px-2 py-1 rounded text-[11px] font-bold bg-slate-700 hover:bg-slate-600 text-amber-300 flex items-center gap-1 shrink-0 transition-colors"
+                                        title="期生（28期生・29期生・30期生など）の追加・名称変更・管理"
+                                    >
+                                        <IconPlus /> 期生設定
+                                    </button>
+                                </div>
+
+                                {/* 過年度比較（パターンA）起動ボタン */}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setCompareConfig(prev => ({
+                                            ...prev,
+                                            examType: activeTab,
+                                            baseCohortId: currentCohort.id
+                                        }));
+                                        setIsCohortCompareOpen(true);
+                                    }}
+                                    className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold px-3 py-1.5 rounded-lg border border-indigo-400/40 flex items-center gap-1.5 shadow-sm transition-colors shrink-0"
+                                    title="期生をまたいだ平均点・偏差値・推移の過年度比較を開きます"
+                                >
+                                    <IconChartBar />
+                                    <span>過年度比較</span>
+                                </button>
                             </div>
                             
                             {/* Settings Button & Clear Data */}
@@ -2225,6 +3210,21 @@
                             {/* Sidebar: Exam List & Tabs */}
                             <div className={`transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-56 border-r opacity-100' : 'w-0 border-r-0 opacity-0'} bg-white border-slate-200 flex flex-col shrink-0 z-10 overflow-hidden`}>
                                 <div className="w-56 flex flex-col h-full">
+                                    {/* サイドバー上部の期生表示＆管理ボタン */}
+                                    <div className="px-3 py-2 bg-slate-800 text-white flex items-center justify-between border-b border-slate-700">
+                                        <div className="flex items-center gap-1.5 truncate">
+                                            <IconUsers />
+                                            <span className="text-xs font-extrabold text-amber-300 truncate">{currentCohort.name}</span>
+                                            <span className="text-[10px] text-slate-400">({currentCohortExams.length}試験)</span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsCohortModalOpen(true)}
+                                            className="text-[10px] bg-slate-700 hover:bg-slate-600 text-slate-200 px-2 py-0.5 rounded font-bold shrink-0"
+                                        >
+                                            切替・追加
+                                        </button>
+                                    </div>
                                     <div className="flex border-b border-slate-200 bg-slate-50 flex-wrap">
                                         <button 
                                             className={`flex-1 py-2 px-1 text-[11px] font-bold transition-colors ${activeTab === 'regular' ? 'text-blue-600 border-b-2 border-blue-600 bg-white' : 'text-slate-500 hover:bg-slate-100'}`}
@@ -2248,7 +3248,7 @@
                                     <div className="flex-1 overflow-y-auto bg-slate-50/30">
                                         {currentExams.length === 0 ? (
                                             <div className="p-8 text-center text-[13px] text-slate-400">
-                                                データがありません<br/>右上のボタンから<br/>CSVを読み込んでください
+                                                <span className="font-bold text-slate-600">{currentCohort.name}</span> の<br/>データがありません<br/><br/>右上のボタンから<br/>CSVを読み込んでください
                                             </div>
                                         ) : (
                                             <ul className="divide-y divide-slate-100">
@@ -2276,6 +3276,9 @@
                                         <div className="p-4 bg-white border-b border-slate-200 flex justify-between items-end shrink-0">
                                             <div>
                                                 <div className="flex items-center gap-2">
+                                                    <span className="text-[11px] font-extrabold px-2 py-0.5 rounded bg-slate-800 text-amber-300 border border-slate-700">
+                                                        {currentCohort.name}
+                                                    </span>
                                                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded text-white ${activeTab === 'regular' ? 'bg-blue-500' : (activeTab === 'benesse' ? 'bg-green-500' : 'bg-purple-500')}`}>
                                                         {activeTab === 'regular' ? '定期試験' : (activeTab === 'benesse' ? '学力推移' : '学期総合')}
                                                     </span>
@@ -2697,6 +3700,255 @@
                             </div>
                         )}
 
+                        {}
+                        {/* --- COHORT MANAGEMENT MODAL (v5.0: 期生の追加・名前変更・並び替え) --- */}
+                        {isCohortModalOpen && (
+                            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setIsCohortModalOpen(false)}>
+                                <div className="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+                                    <div className="bg-slate-900 text-white px-4 py-3.5 flex justify-between items-center">
+                                        <h3 className="font-bold flex items-center gap-2 text-sm sm:text-base">
+                                            <IconUsers /> 期生（学年）の追加・管理
+                                        </h3>
+                                        <button onClick={() => setIsCohortModalOpen(false)} className="text-slate-400 hover:text-white p-1 rounded-full transition-colors">
+                                            <IconX />
+                                        </button>
+                                    </div>
+
+                                    <div className="p-5 bg-slate-50 space-y-5 overflow-y-auto max-h-[80vh]">
+                                        {/* 新規期生の追加フォーム */}
+                                        <form onSubmit={handleAddCohort} className="bg-white p-3.5 rounded-lg border border-slate-200 shadow-sm space-y-2">
+                                            <label className="block text-xs font-bold text-slate-700">
+                                                新しい期生を追加（何期生でも自由に入力できます）
+                                            </label>
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    placeholder="例: 28期生、30期生、2026年度入学生"
+                                                    value={newCohortNameInput}
+                                                    onChange={e => setNewCohortNameInput(e.target.value)}
+                                                    className="flex-1 text-sm border border-slate-300 rounded-lg px-3 py-1.5 outline-none focus:border-blue-500"
+                                                />
+                                                <button
+                                                    type="submit"
+                                                    disabled={!newCohortNameInput.trim()}
+                                                    className="bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-xs font-bold px-4 py-1.5 rounded-lg transition-colors shrink-0"
+                                                >
+                                                    ＋ 追加
+                                                </button>
+                                            </div>
+                                        </form>
+
+                                        {/* 登録済み期生の一覧・名称変更・順序入替 */}
+                                        <div className="space-y-2">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-xs font-bold text-slate-600">登録されている期生一覧</span>
+                                                <span className="text-[11px] text-slate-400">クリックで表示期生を切り替え</span>
+                                            </div>
+                                            <div className="space-y-2">
+                                                {cohorts.map((c, idx) => {
+                                                    const isSelected = c.id === currentCohort.id;
+                                                    const palette = COHORT_PALETTE[idx % COHORT_PALETTE.length];
+                                                    const defaultId = cohorts[0].id;
+                                                    const cExamCount = exams.filter(e => (e.cohortId || defaultId) === c.id).length;
+
+                                                    return (
+                                                        <div
+                                                            key={c.id}
+                                                            className={`p-3 rounded-lg border transition-all bg-white ${
+                                                                isSelected ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-slate-200'
+                                                            }`}
+                                                        >
+                                                            {editingCohortId === c.id ? (
+                                                                <div className="flex items-center gap-2">
+                                                                    <input
+                                                                        type="text"
+                                                                        value={editingCohortName}
+                                                                        onChange={e => setEditingCohortName(e.target.value)}
+                                                                        className="flex-1 text-sm font-bold border border-blue-400 rounded px-2.5 py-1 outline-none"
+                                                                        autoFocus
+                                                                    />
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleSaveCohortName(c.id)}
+                                                                        className="bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded hover:bg-blue-700"
+                                                                    >
+                                                                        保存
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setEditingCohortId(null)}
+                                                                        className="bg-slate-200 text-slate-600 text-xs font-bold px-2.5 py-1 rounded hover:bg-slate-300"
+                                                                    >
+                                                                        戻す
+                                                                    </button>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex items-center justify-between gap-2">
+                                                                    <div
+                                                                        onClick={() => {
+                                                                            setSelectedCohortId(c.id);
+                                                                            setSelectedStudentId(null);
+                                                                        }}
+                                                                        className="flex items-center gap-2.5 flex-1 cursor-pointer"
+                                                                    >
+                                                                        <span className="w-3.5 h-3.5 rounded-full shrink-0" style={{ backgroundColor: palette.color }}></span>
+                                                                        <div>
+                                                                            <div className="flex items-center gap-2">
+                                                                                <span className="font-extrabold text-slate-800 text-sm">{c.name}</span>
+                                                                                {isSelected && (
+                                                                                    <span className="text-[10px] bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded-full">
+                                                                                        選択中
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                            <span className="text-[11px] text-slate-400">登録試験数: {cExamCount}件</span>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="flex items-center gap-1">
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleMoveCohort(idx, 'up')}
+                                                                            disabled={idx === 0}
+                                                                            className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-25"
+                                                                            title="上へ移動"
+                                                                        >
+                                                                            <IconChevronUp />
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleMoveCohort(idx, 'down')}
+                                                                            disabled={idx === cohorts.length - 1}
+                                                                            className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-25"
+                                                                            title="下へ移動"
+                                                                        >
+                                                                            <IconChevronDown />
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setEditingCohortId(c.id);
+                                                                                setEditingCohortName(c.name);
+                                                                            }}
+                                                                            className="p-1.5 text-slate-500 hover:text-blue-600 rounded hover:bg-blue-50"
+                                                                            title="期生名を変更"
+                                                                        >
+                                                                            <IconEdit />
+                                                                        </button>
+                                                                        {cohorts.length > 1 && (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => setConfirmDeleteCohortId(confirmDeleteCohortId === c.id ? null : c.id)}
+                                                                                className="p-1.5 text-slate-400 hover:text-red-600 rounded hover:bg-red-50"
+                                                                                title="この期生を削除"
+                                                                            >
+                                                                                <IconTrash />
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {confirmDeleteCohortId === c.id && (
+                                                                <div className="mt-2 pt-2 border-t border-red-100 bg-red-50/70 p-2 rounded flex items-center justify-between text-xs">
+                                                                    <span className="text-red-700 font-bold">「{c.name}」の全試験データを削除しますか？</span>
+                                                                    <div className="flex gap-1.5">
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleDeleteCohort(c.id)}
+                                                                            className="bg-red-600 text-white font-bold px-2.5 py-1 rounded hover:bg-red-700"
+                                                                        >
+                                                                            削除実行
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => setConfirmDeleteCohortId(null)}
+                                                                            className="bg-white text-slate-600 border border-slate-300 font-bold px-2 py-1 rounded"
+                                                                        >
+                                                                            キャンセル
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-3.5 bg-white border-t border-slate-200 flex justify-end">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsCohortModalOpen(false)}
+                                            className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-lg transition-colors"
+                                        >
+                                            閉じる
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* --- CROSS-COHORT COMPARISON MODAL (v5.0: 過年度比較 パターンA) --- */}
+                        {isCohortCompareOpen && (
+                            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-40 p-2 sm:p-4" onClick={() => setIsCohortCompareOpen(false)}>
+                                <div
+                                    className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col overflow-hidden"
+                                    onClick={e => e.stopPropagation()}
+                                >
+                                    <div className="bg-slate-900 text-white px-4 py-3 sm:px-6 sm:py-4 flex flex-wrap justify-between items-center gap-3 shrink-0">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-indigo-600 text-white rounded-lg flex items-center justify-center font-extrabold shadow-inner shrink-0">
+                                                <IconChartBar />
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-500 text-white">
+                                                        パターンA 世代間分析
+                                                    </span>
+                                                    <span className="text-xs text-slate-400">
+                                                        登録期生（{cohorts.map(c => c.name).join(' / ')}）の比較
+                                                    </span>
+                                                </div>
+                                                <h2 className="text-lg sm:text-xl font-bold leading-tight mt-0.5">
+                                                    過年度比較（期生間 平均点・偏差値・推移比較）
+                                                </h2>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-2 ml-auto">
+                                            <button
+                                                type="button"
+                                                onClick={triggerPrintCohortCompare}
+                                                className="text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-3 rounded-lg border border-emerald-500 flex items-center gap-1.5 shadow-sm transition-colors"
+                                            >
+                                                <IconPrinter /> 比較シートを印刷 / PDF出力
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsCohortCompareOpen(false)}
+                                                className="text-slate-400 hover:text-white transition-colors bg-slate-800 p-2 rounded-full shrink-0"
+                                            >
+                                                <IconX />
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-4 sm:p-6 overflow-y-auto bg-slate-50 flex-1">
+                                        <CrossCohortComparisonView
+                                            cohorts={cohorts}
+                                            exams={exams}
+                                            records={records}
+                                            compareConfig={compareConfig}
+                                            setCompareConfig={setCompareConfig}
+                                            isPrint={false}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* --- RANKING TABLE MODAL (v4.3) --- */}
                         {isRankingOpen && selectedExamId && (
                             <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-40 p-2 sm:p-4" onClick={() => setIsRankingOpen(false)}>
@@ -2865,7 +4117,20 @@
 
                     {/* --- PRINT ONLY TEMPLATE (Hides during normal viewing) --- */}
                     <div className="print-only">
-                        {}
+                        {/* 過年度比較（パターンA）の印刷シート */}
+                        {isPrinting && printModeType === 'cohort_compare' && (
+                            <div className="print-sheet">
+                                <CrossCohortComparisonView
+                                    cohorts={cohorts}
+                                    exams={exams}
+                                    records={records}
+                                    compareConfig={compareConfig}
+                                    setCompareConfig={setCompareConfig}
+                                    isPrint={true}
+                                />
+                            </div>
+                        )}
+
                         {isPrinting && printModeType === 'ranking' && currentExamRankingSections.map((sec) => {
                             // 20位タイが極めて多い場合（35行超など）のみ縮小し、通常時はA4縦1枚いっぱいに広げて表示
                             let maxRows = 20;
