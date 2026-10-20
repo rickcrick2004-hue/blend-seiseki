@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BLEND 成績推移トラッカー v5.2</title>
+    <title>BLEND 成績推移トラッカー v5.3</title>
     <!-- React & Babelのバージョンを安定版に固定 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
@@ -735,34 +735,52 @@
         const IconEdit = () => <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>;
         const IconPlus = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
 
-        // 期生（コホート）別のカラーパレット定義（3年周期：28期生=緑、29期生=赤、30期生=青）
-        const COHORT_COLOR_THEMES = {
-            green: { color: '#16a34a', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-300', badge: 'bg-emerald-600', lightBg: '#dcfce7' },
-            red:   { color: '#ef4444', bg: 'bg-red-50',     text: 'text-red-700',     border: 'border-red-300',     badge: 'bg-red-600',     lightBg: '#fee2e2' },
-            blue:  { color: '#2563eb', bg: 'bg-blue-50',    text: 'text-blue-700',    border: 'border-blue-300',    badge: 'bg-blue-600',    lightBg: '#dbeafe' }
+        // 期生（コホート）別の3年周期カラーパレット定義（28期生=緑、29期生=赤、30期生=青）
+        const COHORT_CYCLE_PALETTES = {
+            red: { color: '#ef4444', bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-300', badge: 'bg-red-600', activeBtn: 'bg-red-600 text-white shadow-sm', inactiveBtn: 'text-red-300 hover:text-white hover:bg-slate-700', lightBg: '#fee2e2' },
+            blue: { color: '#2563eb', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-300', badge: 'bg-blue-600', activeBtn: 'bg-blue-600 text-white shadow-sm', inactiveBtn: 'text-blue-300 hover:text-white hover:bg-slate-700', lightBg: '#dbeafe' },
+            green: { color: '#10b981', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-300', badge: 'bg-emerald-600', activeBtn: 'bg-emerald-600 text-white shadow-sm', inactiveBtn: 'text-emerald-300 hover:text-white hover:bg-slate-700', lightBg: '#d1fae5' }
         };
 
-        const COHORT_PALETTE = [
-            COHORT_COLOR_THEMES.red,   // 29期生など (余り2)
-            COHORT_COLOR_THEMES.blue,  // 30期生など (余り0)
-            COHORT_COLOR_THEMES.green  // 28期生など (余り1)
-        ];
-
-        // 期生名に含まれる数字から3年周期の学年カラー（28期=緑、29期=赤、30期=青）を自動判定するヘルパー関数
-        const getCohortPalette = (cohortOrName, fallbackIdx = 0) => {
-            const rawName = typeof cohortOrName === 'string' ? cohortOrName : (cohortOrName?.name || '');
-            const halfName = rawName.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
-            const match = halfName.match(/(\d+)\s*期/) || halfName.match(/(\d+)/);
+        // 期生名に含まれる数字から3年周期でカラーを返すヘルパー関数
+        // 28期生(28%3=1) => 緑、29期生(29%3=2) => 赤、30期生(30%3=0) => 青
+        const getCohortPalette = (cohort, fallbackIdx = 0) => {
+            const rawName = cohort && cohort.name ? String(cohort.name) : '';
+            const halfWidthName = rawName.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+            const match = halfWidthName.match(/(\d+)/);
             if (match) {
                 const num = parseInt(match[1], 10);
-                if (!isNaN(num)) {
-                    const mod = num % 3;
-                    if (mod === 1) return COHORT_COLOR_THEMES.green; // 25, 28, 31期生... -> 緑
-                    if (mod === 2) return COHORT_COLOR_THEMES.red;   // 26, 29, 32期生... -> 赤
-                    if (mod === 0) return COHORT_COLOR_THEMES.blue;  // 27, 30, 33期生... -> 青
-                }
+                const mod = ((num % 3) + 3) % 3;
+                if (mod === 1) return COHORT_CYCLE_PALETTES.green; // 28期生, 31期生...
+                if (mod === 2) return COHORT_CYCLE_PALETTES.red;   // 29期生, 32期生...
+                return COHORT_CYCLE_PALETTES.blue;                 // 30期生, 33期生...
             }
-            return COHORT_PALETTE[fallbackIdx % COHORT_PALETTE.length];
+            const fallbackOrder = [COHORT_CYCLE_PALETTES.red, COHORT_CYCLE_PALETTES.blue, COHORT_CYCLE_PALETTES.green];
+            return fallbackOrder[fallbackIdx % 3];
+        };
+
+        // クラス別のカラー定義（A組=赤、B組=青、C組=緑、全体=ダークスレート）
+        const getClassPalette = (className, idx = 0) => {
+            const norm = String(className || '').trim().toUpperCase();
+            if (norm === 'A' || norm === '1' || norm === '１') {
+                return { color: '#ef4444', bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-300', badge: 'bg-red-600', lightBg: '#fee2e2', label: `${className}組` };
+            }
+            if (norm === 'B' || norm === '2' || norm === '２') {
+                return { color: '#2563eb', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-300', badge: 'bg-blue-600', lightBg: '#dbeafe', label: `${className}組` };
+            }
+            if (norm === 'C' || norm === '3' || norm === '３') {
+                return { color: '#10b981', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-300', badge: 'bg-emerald-600', lightBg: '#d1fae5', label: `${className}組` };
+            }
+            if (norm === 'ALL' || norm === '全体') {
+                return { color: '#1e293b', bg: 'bg-slate-100', text: 'text-slate-800', border: 'border-slate-400', badge: 'bg-slate-800', lightBg: '#f1f5f9', label: '学年全体', isAll: true };
+            }
+            const fallback = [
+                { color: '#ef4444', bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-300', badge: 'bg-red-600', lightBg: '#fee2e2', label: `${className}組` },
+                { color: '#2563eb', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-300', badge: 'bg-blue-600', lightBg: '#dbeafe', label: `${className}組` },
+                { color: '#10b981', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-300', badge: 'bg-emerald-600', lightBg: '#d1fae5', label: `${className}組` },
+                { color: '#f97316', bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-300', badge: 'bg-orange-500', lightBg: '#ffedd5', label: `${className}組` }
+            ];
+            return fallback[idx % fallback.length];
         };
 
         // 生徒レコードから指定科目のスコアを取得するヘルパー関数（5教科・9教科の総点・平均点の自動補完対応）
@@ -1839,6 +1857,1502 @@
             );
         };
 
+        // --- 統計計算用ヘルパー関数群（クラス間比較用） ---
+        const calcArrayStats = (values) => {
+            if (!values || values.length === 0) return null;
+            const sorted = [...values].sort((a, b) => a - b);
+            const count = sorted.length;
+            const sum = sorted.reduce((acc, v) => acc + v, 0);
+            const avg = sum / count;
+            const mid = Math.floor(count / 2);
+            const median = count % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+            const max = sorted[count - 1];
+            const min = sorted[0];
+            const variance = sorted.reduce((acc, v) => acc + Math.pow(v - avg, 2), 0) / count;
+            const stdDev = Math.sqrt(variance);
+            return { count, avg, median, max, min, stdDev };
+        };
+
+        // --- 同一期生内 クラス間比較（A組 vs B組など）コンポーネント（画面＆印刷共用） ---
+        const ClassComparisonView = ({
+            cohorts,
+            currentCohort,
+            onSelectCohort,
+            cohortExams,
+            records,
+            classCompareConfig,
+            setClassCompareConfig,
+            isPrint = false
+        }) => {
+            const {
+                examType = 'regular',
+                mode = 'single',               // 'single' (試験別詳細比較) | 'trend' (通年推移比較)
+                selectedExamId = '',
+                singleSubTab = 'overview',     // 'overview' | 'distribution' | 'top_share'
+                overviewStatKey = 'avg',       // 棒グラフで表示する指標: 'avg' | 'median' | 'max' | 'min' | 'stdDev' | 'highRate' | 'lowRate'
+                distSubject = '5教科平均点',
+                trendSubject = '5教科平均点',
+                trendMetricType = 'average',   // 'average' | 'median' | 'count_gte' | 'rate_gte' | 'count_lt' | 'rate_lt' | 'top_n'
+                trendThreshold = 80,
+                trendTopN = 20
+            } = classCompareConfig;
+
+            // 選択中の試験種別に該当する期生内試験リスト
+            const typeExams = useMemo(() => {
+                return cohortExams.filter(e => (e.type || 'regular') === examType);
+            }, [cohortExams, examType]);
+
+            // 選択中の試験オブジェクト（未選択時は最新試験）
+            const activeExam = useMemo(() => {
+                if (typeExams.length === 0) return null;
+                return typeExams.find(e => e.id === selectedExamId) || typeExams[typeExams.length - 1];
+            }, [typeExams, selectedExamId]);
+
+            // 試験種別が変わった際に対象試験IDを同期
+            useEffect(() => {
+                if (typeExams.length > 0 && (!selectedExamId || !typeExams.some(e => e.id === selectedExamId))) {
+                    setClassCompareConfig(prev => ({
+                        ...prev,
+                        selectedExamId: typeExams[typeExams.length - 1].id
+                    }));
+                }
+            }, [typeExams, selectedExamId]);
+
+            // 期生内に存在するクラス一覧を抽出（デフォルトは ['A', 'B']）
+            const detectedClasses = useMemo(() => {
+                const clsSet = new Set();
+                const targetExamIds = new Set(typeExams.map(e => e.id));
+                records.forEach(r => {
+                    if (targetExamIds.has(r.examId) && r.class) {
+                        clsSet.add(String(r.class).trim());
+                    }
+                });
+                const sorted = Array.from(clsSet).sort();
+                return sorted.length > 0 ? sorted : ['A', 'B'];
+            }, [typeExams, records]);
+
+            // 比較対象科目リスト（席次・順位は除く）
+            const compareSubjects = useMemo(() => {
+                const isRank = (s) => s.includes('席次') || s.includes('順位');
+                const subSet = new Set();
+                typeExams.forEach(ex => {
+                    records.filter(r => r.examId === ex.id).forEach(r => {
+                        if (r.scores) {
+                            Object.keys(r.scores).forEach(s => {
+                                if (!isRank(s)) subSet.add(s);
+                            });
+                        }
+                    });
+                });
+                if (examType === 'benesse') {
+                    ['国語点数', '国語偏差値', '数学点数', '数学偏差値', '英語点数', '英語偏差値', '3教科点数', '3教科偏差値'].forEach(s => subSet.add(s));
+                } else if (examType === 'comprehensive') {
+                    ['国語', '社会', '数学', '理科', '英語', '5教科総点', '5教科平均点', '音楽', '美術', '保体', '技家', '9教科総点', '9教科平均点'].forEach(s => subSet.add(s));
+                } else {
+                    ['国語', '社会', '数学', '理科', '英語', '5教科総点', '5教科平均点'].forEach(s => subSet.add(s));
+                }
+                const arr = Array.from(subSet);
+                arr.sort((a, b) => {
+                    const idxA = SUBJECT_ORDER.indexOf(a);
+                    const idxB = SUBJECT_ORDER.indexOf(b);
+                    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                    if (idxA !== -1) return -1;
+                    if (idxB !== -1) return 1;
+                    return a.localeCompare(b);
+                });
+                return arr;
+            }, [typeExams, records, examType]);
+
+            // 棒グラフ対象科目（100点満点系または偏差値系）
+            const chartSubjects = useMemo(() => {
+                if (examType === 'benesse') {
+                    return ['国語偏差値', '数学偏差値', '英語偏差値', '3教科偏差値'].filter(s => compareSubjects.includes(s));
+                }
+                if (examType === 'comprehensive') {
+                    return ['国語', '社会', '数学', '理科', '英語', '5教科平均点', '音楽', '美術', '保体', '技家', '9教科平均点'].filter(s => compareSubjects.includes(s));
+                }
+                return ['国語', '社会', '数学', '理科', '英語', '5教科平均点'].filter(s => compareSubjects.includes(s));
+            }, [examType, compareSubjects]);
+
+            // 科目選択の自動補正
+            useEffect(() => {
+                let nextDist = distSubject;
+                let nextTrend = trendSubject;
+                const defaultSub = examType === 'benesse' ? '3教科偏差値' : '5教科平均点';
+                if (compareSubjects.length > 0 && !compareSubjects.includes(distSubject)) {
+                    nextDist = compareSubjects.includes(defaultSub) ? defaultSub : compareSubjects[0];
+                }
+                if (compareSubjects.length > 0 && !compareSubjects.includes(trendSubject)) {
+                    nextTrend = compareSubjects.includes(defaultSub) ? defaultSub : compareSubjects[0];
+                }
+                if (nextDist !== distSubject || nextTrend !== trendSubject) {
+                    setClassCompareConfig(prev => ({
+                        ...prev,
+                        distSubject: nextDist,
+                        trendSubject: nextTrend
+                    }));
+                }
+            }, [compareSubjects, distSubject, trendSubject, examType]);
+
+            // 特定の試験・クラスにおける全科目の詳細統計を計算する関数
+            const computeClassStatsForExam = (exam, classFilter) => {
+                if (!exam) return null;
+                let examRecords = records.filter(r => r.examId === exam.id);
+                if (classFilter !== 'ALL') {
+                    examRecords = examRecords.filter(r => String(r.class).trim() === classFilter);
+                }
+                const isBenesse = exam.type === 'benesse';
+                const coreSubjects = isBenesse ? ['国語点数', '数学点数', '英語点数'] : ['国語', '社会', '数学', '理科', '英語'];
+                const examineeCount = examRecords.filter(r => coreSubjects.every(sub => r.scores && r.scores[sub] !== undefined && r.scores[sub] !== null)).length;
+
+                const subjectStats = {};
+                compareSubjects.forEach(sub => {
+                    const vals = [];
+                    examRecords.forEach(r => {
+                        const v = getStudentSubjectScore(r, sub);
+                        if (v !== null && !isNaN(v)) vals.push(v);
+                    });
+                    const st = calcArrayStats(vals);
+                    if (st) {
+                        // 上位基準（80点以上 / 偏差値60以上 / 5教科400点以上 / 9教科720点以上 / 3教科240点以上）
+                        const highTh = sub.includes('偏差値') ? 60 : (sub === '5教科総点' ? 400 : (sub === '9教科総点' ? 720 : (sub === '3教科点数' ? 240 : 80)));
+                        // 下位基準（50点未満 / 偏差値45未満 / 5教科250点未満 / 9教科450点未満 / 3教科150点未満）
+                        const lowTh = sub.includes('偏差値') ? 45 : (sub === '5教科総点' ? 250 : (sub === '9教科総点' ? 450 : (sub === '3教科点数' ? 150 : 50)));
+                        const highCount = vals.filter(v => v >= highTh).length;
+                        const lowCount = vals.filter(v => v < lowTh).length;
+                        subjectStats[sub] = {
+                            ...st,
+                            values: vals,
+                            highTh,
+                            lowTh,
+                            highCount,
+                            highRate: (highCount / st.count) * 100,
+                            lowCount,
+                            lowRate: (lowCount / st.count) * 100
+                        };
+                    }
+                });
+
+                return {
+                    classFilter,
+                    totalStudents: examRecords.length,
+                    examineeCount,
+                    subjectStats,
+                    rawRecords: examRecords
+                };
+            };
+
+            // 選択中の試験における各クラス＋学年全体の統計データ
+            const singleExamClassData = useMemo(() => {
+                if (!activeExam) return { classes: [], overall: null };
+                const classes = detectedClasses.map((cls, idx) => ({
+                    className: cls,
+                    palette: getClassPalette(cls, idx),
+                    data: computeClassStatsForExam(activeExam, cls)
+                }));
+                const overall = {
+                    className: 'ALL',
+                    palette: getClassPalette('ALL'),
+                    data: computeClassStatsForExam(activeExam, 'ALL')
+                };
+                return { classes, overall };
+            }, [activeExam, detectedClasses, records, compareSubjects]);
+
+            // 分布・階層比較用のバンド定義（distSubjectに応じた階層）
+            const distributionBands = useMemo(() => {
+                const isDev = distSubject.includes('偏差値');
+                if (isDev) {
+                    return [
+                        { label: '偏差値 70以上', min: 70, max: 999 },
+                        { label: '偏差値 60〜69.9', min: 60, max: 70 },
+                        { label: '偏差値 50〜59.9', min: 50, max: 60 },
+                        { label: '偏差値 40〜49.9', min: 40, max: 50 },
+                        { label: '偏差値 30〜39.9', min: 30, max: 40 },
+                        { label: '偏差値 30未満', min: -999, max: 30 }
+                    ];
+                }
+                if (distSubject === '5教科総点') {
+                    return [
+                        { label: '450〜500点', min: 450, max: 501 },
+                        { label: '400〜449点', min: 400, max: 450 },
+                        { label: '350〜399点', min: 350, max: 400 },
+                        { label: '300〜349点', min: 300, max: 350 },
+                        { label: '250〜299点', min: 250, max: 300 },
+                        { label: '200〜249点', min: 200, max: 250 },
+                        { label: '200点未満', min: -999, max: 200 }
+                    ];
+                }
+                if (distSubject === '9教科総点') {
+                    return [
+                        { label: '800〜900点', min: 800, max: 901 },
+                        { label: '720〜799点', min: 720, max: 800 },
+                        { label: '630〜719点', min: 630, max: 720 },
+                        { label: '540〜629点', min: 540, max: 630 },
+                        { label: '450〜539点', min: 450, max: 540 },
+                        { label: '360〜449点', min: 360, max: 450 },
+                        { label: '360点未満', min: -999, max: 360 }
+                    ];
+                }
+                if (distSubject === '3教科点数') {
+                    return [
+                        { label: '270〜300点', min: 270, max: 301 },
+                        { label: '240〜269点', min: 240, max: 270 },
+                        { label: '210〜239点', min: 210, max: 240 },
+                        { label: '180〜209点', min: 180, max: 210 },
+                        { label: '150〜179点', min: 150, max: 180 },
+                        { label: '120〜149点', min: 120, max: 150 },
+                        { label: '120点未満', min: -999, max: 120 }
+                    ];
+                }
+                return [
+                    { label: '90〜100点', min: 90, max: 101 },
+                    { label: '80〜89点', min: 80, max: 90 },
+                    { label: '70〜79点', min: 70, max: 80 },
+                    { label: '60〜69点', min: 60, max: 70 },
+                    { label: '50〜59点', min: 50, max: 60 },
+                    { label: '40〜49点', min: 40, max: 50 },
+                    { label: '30〜39点', min: 30, max: 40 },
+                    { label: '30点未満', min: -999, max: 30 }
+                ];
+            }, [distSubject]);
+
+            // 10点刻み／偏差値10刻みの累積しきい値リスト（分布タブ＆通年推移タブ用）
+            const cumulativeThresholds = useMemo(() => {
+                const targetSub = mode === 'single' ? distSubject : trendSubject;
+                if (targetSub.includes('偏差値') || (examType === 'benesse' && mode === 'trend')) {
+                    return [30, 40, 50, 60, 70, 80];
+                }
+                if (targetSub === '5教科総点') {
+                    return [150, 200, 250, 300, 350, 400, 450];
+                }
+                if (targetSub === '9教科総点') {
+                    return [360, 450, 540, 630, 720, 810];
+                }
+                if (targetSub === '3教科点数') {
+                    return [90, 120, 150, 180, 210, 240, 270];
+                }
+                return [20, 30, 40, 50, 60, 70, 80, 90];
+            }, [mode, distSubject, trendSubject, examType]);
+
+            // 学年上位シェア（TOP 10 / TOP 20 / TOP 30）のクラス別内訳を計算
+            const topShareBySubject = useMemo(() => {
+                if (!activeExam) return [];
+                const examRecords = records.filter(r => r.examId === activeExam.id);
+                return compareSubjects.map(sub => {
+                    const scored = [];
+                    examRecords.forEach(r => {
+                        const v = getStudentSubjectScore(r, sub);
+                        if (v !== null && !isNaN(v)) {
+                            scored.push({ studentId: r.studentId, class: String(r.class).trim(), val: v });
+                        }
+                    });
+                    scored.sort((a, b) => b.val - a.val);
+                    // 同点同順位の付与
+                    let rank = 1;
+                    const ranked = scored.map((item, idx) => {
+                        if (idx > 0 && item.val !== scored[idx - 1].val) {
+                            rank = idx + 1;
+                        }
+                        return { ...item, rank };
+                    });
+
+                    const calcShare = (topLimit) => {
+                        const topItems = ranked.filter(item => item.rank <= topLimit);
+                        const counts = {};
+                        detectedClasses.forEach(c => { counts[c] = 0; });
+                        topItems.forEach(item => {
+                            counts[item.class] = (counts[item.class] || 0) + 1;
+                        });
+                        return { total: topItems.length, counts };
+                    };
+
+                    return {
+                        subject: sub,
+                        top10: calcShare(10),
+                        top20: calcShare(20),
+                        top30: calcShare(30)
+                    };
+                });
+            }, [activeExam, records, compareSubjects, detectedClasses]);
+
+            // モード②：通年推移のクラス別シリーズ計算
+            const classTrendSeries = useMemo(() => {
+                const targetGroups = [
+                    ...detectedClasses.map((cls, idx) => ({ key: cls, palette: getClassPalette(cls, idx) })),
+                    { key: 'ALL', palette: getClassPalette('ALL') }
+                ];
+
+                return targetGroups.map(group => {
+                    const points = typeExams.map(exam => {
+                        const allExamRecs = records.filter(r => r.examId === exam.id);
+                        const groupRecs = group.key === 'ALL'
+                            ? allExamRecs
+                            : allExamRecs.filter(r => String(r.class).trim() === group.key);
+
+                        const vals = [];
+                        groupRecs.forEach(r => {
+                            const v = getStudentSubjectScore(r, trendSubject);
+                            if (v !== null && !isNaN(v)) vals.push(v);
+                        });
+
+                        if (vals.length === 0) {
+                            return { examId: exam.id, examName: exam.name, val: null, subText: null };
+                        }
+
+                        const st = calcArrayStats(vals);
+                        if (trendMetricType === 'average') {
+                            return { examId: exam.id, examName: exam.name, val: st.avg, count: st.count };
+                        }
+                        if (trendMetricType === 'median') {
+                            return { examId: exam.id, examName: exam.name, val: st.median, count: st.count };
+                        }
+                        if (trendMetricType === 'count_gte' || trendMetricType === 'rate_gte') {
+                            const matched = vals.filter(v => v >= Number(trendThreshold)).length;
+                            const rate = (matched / st.count) * 100;
+                            return {
+                                examId: exam.id,
+                                examName: exam.name,
+                                val: trendMetricType === 'count_gte' ? matched : rate,
+                                matched,
+                                rate,
+                                count: st.count
+                            };
+                        }
+                        if (trendMetricType === 'count_lt' || trendMetricType === 'rate_lt') {
+                            const matched = vals.filter(v => v < Number(trendThreshold)).length;
+                            const rate = (matched / st.count) * 100;
+                            return {
+                                examId: exam.id,
+                                examName: exam.name,
+                                val: trendMetricType === 'count_lt' ? matched : rate,
+                                matched,
+                                rate,
+                                count: st.count
+                            };
+                        }
+                        if (trendMetricType === 'top_n') {
+                            // 学年全体の中でTOP Nに入っている該当クラスの生徒数を算出
+                            const allScored = [];
+                            allExamRecs.forEach(r => {
+                                const v = getStudentSubjectScore(r, trendSubject);
+                                if (v !== null && !isNaN(v)) {
+                                    allScored.push({ class: String(r.class).trim(), val: v });
+                                }
+                            });
+                            allScored.sort((a, b) => b.val - a.val);
+                            let rk = 1;
+                            const allRanked = allScored.map((it, idx) => {
+                                if (idx > 0 && it.val !== allScored[idx - 1].val) rk = idx + 1;
+                                return { ...it, rank: rk };
+                            });
+                            const topAll = allRanked.filter(it => it.rank <= Number(trendTopN));
+                            const matched = group.key === 'ALL'
+                                ? topAll.length
+                                : topAll.filter(it => it.class === group.key).length;
+                            const shareRate = topAll.length > 0 ? (matched / topAll.length) * 100 : 0;
+                            return {
+                                examId: exam.id,
+                                examName: exam.name,
+                                val: matched,
+                                matched,
+                                rate: shareRate,
+                                count: topAll.length
+                            };
+                        }
+                        return { examId: exam.id, examName: exam.name, val: st.avg, count: st.count };
+                    });
+
+                    return {
+                        key: group.key,
+                        palette: group.palette,
+                        points
+                    };
+                });
+            }, [detectedClasses, typeExams, records, trendSubject, trendMetricType, trendThreshold, trendTopN]);
+
+            const typeTitle = examType === 'regular' ? '定期試験' : (examType === 'benesse' ? '学力推移調査' : '学期総合');
+            const firstCls = singleExamClassData.classes[0];
+            const secondCls = singleExamClassData.classes[1];
+
+            // 概要タブの棒グラフ指標ラベル定義
+            const overviewStatOptions = [
+                { key: 'avg', label: '平均点（平均偏差値）', unit: '' },
+                { key: 'median', label: '中央値（メジアン）', unit: '' },
+                { key: 'max', label: '最高点', unit: '' },
+                { key: 'min', label: '最低点', unit: '' },
+                { key: 'stdDev', label: '標準偏差（ばらつき）', unit: '' },
+                { key: 'highRate', label: examType === 'benesse' ? '偏差値60以上の割合(%)' : '80点以上の割合(%)', unit: '%' },
+                { key: 'lowRate', label: examType === 'benesse' ? '偏差値45未満の割合(%)' : '50点未満の割合(%)', unit: '%' }
+            ];
+
+            return (
+                <div className={isPrint ? 'w-full' : 'space-y-4'}>
+                    {/* 印刷時のヘッダー */}
+                    {isPrint && (
+                        <div className="flex items-center justify-between border-b-2 border-slate-800 pb-2 mb-3">
+                            <div>
+                                <h2 className="text-lg font-extrabold text-slate-900">
+                                    {currentCohort.name} クラス間比較レポート（{typeTitle} ／ {mode === 'single' ? `${activeExam ? activeExam.name : ''}` : `通年推移：${trendSubject}`}）
+                                </h2>
+                                <p className="text-[10.5px] text-slate-500">
+                                    対象クラス: {detectedClasses.map(c => `${c}組`).join(' vs ')}
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 操作パネル（画面表示時のみ） */}
+                    {!isPrint && (
+                        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200 shadow-sm space-y-3.5">
+                            <div className="flex flex-wrap items-center justify-between gap-2.5">
+                                {/* 期生切替ボタン（3年周期カラー対応） */}
+                                <div className="flex flex-wrap items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
+                                    <span className="text-[11px] font-bold text-slate-500 px-1.5">対象期生:</span>
+                                    {cohorts.map((c, idx) => {
+                                        const pal = getCohortPalette(c, idx);
+                                        const isAct = c.id === currentCohort.id;
+                                        return (
+                                            <button
+                                                key={c.id}
+                                                type="button"
+                                                onClick={() => onSelectCohort(c.id)}
+                                                className={`px-2.5 py-1 rounded-md text-xs font-extrabold transition-all flex items-center gap-1.5 ${
+                                                    isAct ? `${pal.badge} text-white shadow` : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+                                                }`}
+                                            >
+                                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: isAct ? '#fff' : pal.color }}></span>
+                                                {c.name}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+
+                                {/* 試験種別タブ */}
+                                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
+                                    {[
+                                        { id: 'regular', label: '定期試験', activeCls: 'bg-blue-600 text-white shadow' },
+                                        { id: 'benesse', label: '学力推移調査', activeCls: 'bg-green-600 text-white shadow' },
+                                        { id: 'comprehensive', label: '学期総合', activeCls: 'bg-purple-600 text-white shadow' }
+                                    ].map(t => (
+                                        <button
+                                            key={t.id}
+                                            type="button"
+                                            onClick={() => setClassCompareConfig(prev => ({ ...prev, examType: t.id, selectedExamId: '' }))}
+                                            className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${examType === t.id ? t.activeCls : 'text-slate-600 hover:bg-white/60'}`}
+                                        >
+                                            {t.label}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {/* 比較モード（試験別詳細 vs 通年推移） */}
+                                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
+                                    <button
+                                        type="button"
+                                        onClick={() => setClassCompareConfig(prev => ({ ...prev, mode: 'single' }))}
+                                        className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${mode === 'single' ? 'bg-slate-800 text-white shadow' : 'text-slate-600 hover:bg-white/60'}`}
+                                    >
+                                        📊 試験別でクラス間比較（多項目分析）
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setClassCompareConfig(prev => ({ ...prev, mode: 'trend' }))}
+                                        className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${mode === 'trend' ? 'bg-slate-800 text-white shadow' : 'text-slate-600 hover:bg-white/60'}`}
+                                    >
+                                        📈 通年推移でクラス間比較（A組 vs B組の推移）
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* モード①：試験選択＆分析視点サブタブ */}
+                            {mode === 'single' && (
+                                <div className="space-y-3 pt-2 border-t border-slate-100">
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                        <span className="text-xs font-bold text-slate-500 mr-1">対象試験を選択:</span>
+                                        {typeExams.length === 0 ? (
+                                            <span className="text-xs text-slate-400">この種別の試験データが登録されていません</span>
+                                        ) : (
+                                            typeExams.map(ex => (
+                                                <button
+                                                    key={ex.id}
+                                                    type="button"
+                                                    onClick={() => setClassCompareConfig(prev => ({ ...prev, selectedExamId: ex.id }))}
+                                                    className={`px-3 py-1 rounded-full text-xs font-bold border transition-all ${
+                                                        (activeExam && activeExam.id === ex.id)
+                                                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                                            : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-blue-50'
+                                                    }`}
+                                                >
+                                                    {ex.name}
+                                                </button>
+                                            ))
+                                        )}
+                                    </div>
+
+                                    {/* 3つの詳細分析サブタブ */}
+                                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                                        <span className="text-xs font-bold text-slate-500 mr-1">比較する項目・視点:</span>
+                                        {[
+                                            { id: 'overview', label: '① 全科目の基本統計（平均・中央値・最高・最低・標準偏差・上位/下位率）' },
+                                            { id: 'distribution', label: '② 点数・偏差値 階層分布 ＆ 10点/10刻み人数・割合比較' },
+                                            { id: 'top_share', label: '③ 学年上位層（TOP10 / TOP20 / TOP30）のクラス別シェア比較' }
+                                        ].map(tab => (
+                                            <button
+                                                key={tab.id}
+                                                type="button"
+                                                onClick={() => setClassCompareConfig(prev => ({ ...prev, singleSubTab: tab.id }))}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold border transition-all ${
+                                                    singleSubTab === tab.id
+                                                        ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
+                                                        : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                                                }`}
+                                            >
+                                                {tab.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* モード②：通年推移の指標選択＆科目・基準値セレクター */}
+                            {mode === 'trend' && (
+                                <div className="space-y-3 pt-2 border-t border-slate-100">
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                        <span className="text-xs font-bold text-slate-500 mr-1">推移を比較する項目:</span>
+                                        {[
+                                            { id: 'average', label: '📈 平均点の推移', cls: 'bg-blue-600 text-white' },
+                                            { id: 'median', label: '📐 中央値（メジアン）の推移', cls: 'bg-indigo-600 text-white' },
+                                            { id: 'count_gte', label: examType === 'benesse' ? '⬆️ 指定偏差値「以上」の人数' : '⬆️ 指定点数「以上」の人数', cls: 'bg-emerald-600 text-white' },
+                                            { id: 'rate_gte', label: examType === 'benesse' ? '📊 指定偏差値「以上」の割合(%)' : '📊 指定点数「以上」の割合(%)', cls: 'bg-teal-600 text-white' },
+                                            { id: 'count_lt', label: examType === 'benesse' ? '⬇️ 指定偏差値「未満」の人数' : '⬇️ 指定点数「未満」の人数', cls: 'bg-rose-600 text-white' },
+                                            { id: 'top_n', label: '🏆 学年上位（TOP N）のクラス別人数', cls: 'bg-amber-600 text-white' }
+                                        ].map(m => (
+                                            <button
+                                                key={m.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    let defaultTh = trendThreshold;
+                                                    if (m.id.includes('gte')) {
+                                                        defaultTh = trendSubject.includes('偏差値') ? 60 : (trendSubject === '5教科総点' ? 400 : (trendSubject === '9教科総点' ? 720 : 80));
+                                                    } else if (m.id.includes('lt')) {
+                                                        defaultTh = trendSubject.includes('偏差値') ? 40 : (trendSubject === '5教科総点' ? 250 : (trendSubject === '9教科総点' ? 450 : 50));
+                                                    }
+                                                    setClassCompareConfig(prev => ({ ...prev, trendMetricType: m.id, trendThreshold: defaultTh }));
+                                                }}
+                                                className={`px-2.5 py-1 rounded-md text-xs font-bold border transition-all ${
+                                                    trendMetricType === m.id ? `${m.cls} border-transparent shadow-sm` : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
+                                                }`}
+                                            >
+                                                {m.label}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    {/* 対象科目の選択 */}
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                        <span className="text-xs font-bold text-slate-500 mr-1">対象科目:</span>
+                                        {compareSubjects.map(sub => (
+                                            <button
+                                                key={sub}
+                                                type="button"
+                                                onClick={() => {
+                                                    let nextTh = trendThreshold;
+                                                    if (sub.includes('偏差値')) nextTh = trendMetricType.includes('lt') ? 40 : 60;
+                                                    else if (sub === '5教科総点') nextTh = trendMetricType.includes('lt') ? 250 : 400;
+                                                    else if (sub === '9教科総点') nextTh = trendMetricType.includes('lt') ? 450 : 720;
+                                                    else if (sub === '3教科点数') nextTh = trendMetricType.includes('lt') ? 150 : 240;
+                                                    else nextTh = trendMetricType.includes('lt') ? 50 : 80;
+                                                    setClassCompareConfig(prev => ({ ...prev, trendSubject: sub, trendThreshold: nextTh }));
+                                                }}
+                                                className={`px-2.5 py-1 rounded-full text-xs font-bold border transition-all ${
+                                                    trendSubject === sub
+                                                        ? 'bg-slate-800 text-white border-slate-800 shadow-sm'
+                                                        : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'
+                                                }`}
+                                            >
+                                                {sub}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    {/* 基準値（10点刻み/偏差値10刻み）または TOP N の選択 */}
+                                    {(trendMetricType === 'count_gte' || trendMetricType === 'rate_gte' || trendMetricType === 'count_lt') && (
+                                        <div className="flex flex-wrap items-center gap-1.5 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                                            <span className="text-xs font-bold text-slate-700 mr-1">基準値を選択:</span>
+                                            {cumulativeThresholds.map(val => (
+                                                <button
+                                                    key={val}
+                                                    type="button"
+                                                    onClick={() => setClassCompareConfig(prev => ({ ...prev, trendThreshold: val }))}
+                                                    className={`px-2.5 py-1 rounded text-xs font-extrabold border transition-all ${
+                                                        Number(trendThreshold) === val
+                                                            ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                                                            : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                                                    }`}
+                                                >
+                                                    {trendSubject.includes('偏差値') ? `偏差値 ${val}` : `${val}点`}
+                                                    {trendMetricType.includes('lt') ? ' 未満' : ' 以上'}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {trendMetricType === 'top_n' && (
+                                        <div className="flex flex-wrap items-center gap-2 bg-amber-50/70 p-2.5 rounded-lg border border-amber-200">
+                                            <span className="text-xs font-bold text-amber-900">学年上位の範囲を選択:</span>
+                                            {[10, 20, 30, 50].map(n => (
+                                                <button
+                                                    key={n}
+                                                    type="button"
+                                                    onClick={() => setClassCompareConfig(prev => ({ ...prev, trendTopN: n }))}
+                                                    className={`px-3 py-1 rounded text-xs font-extrabold border transition-all ${
+                                                        Number(trendTopN) === n
+                                                            ? 'bg-amber-600 text-white border-amber-600 shadow-sm'
+                                                            : 'bg-white text-amber-900 border-amber-300 hover:bg-amber-100'
+                                                    }`}
+                                                >
+                                                    学年 TOP {n} 以内
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ========================================================= */}
+                    {/* モード①：試験別のクラス間詳細比較 */}
+                    {/* ========================================================= */}
+                    {mode === 'single' && activeExam && (
+                        <div className="space-y-4">
+                            {/* サブタブ①：全科目の基本統計 ＆ グループ棒グラフ */}
+                            {singleSubTab === 'overview' && (
+                                <>
+                                    {/* 1. 教科別 クラス間比較棒グラフ（指標切替対応） */}
+                                    {chartSubjects.length > 0 && (() => {
+                                        const currentOpt = overviewStatOptions.find(o => o.key === overviewStatKey) || overviewStatOptions[0];
+                                        const isDev = examType === 'benesse' && (overviewStatKey === 'avg' || overviewStatKey === 'median' || overviewStatKey === 'max' || overviewStatKey === 'min');
+                                        const isStd = overviewStatKey === 'stdDev';
+                                        const minY = isDev ? 30 : 0;
+                                        const maxY = isDev ? 85 : (isStd ? 30 : 100);
+                                        const ticks = isDev ? [30, 40, 50, 60, 70, 80] : (isStd ? [0, 5, 10, 15, 20, 25, 30] : [0, 20, 40, 60, 80, 100]);
+
+                                        const groupsToPlot = [...singleExamClassData.classes, singleExamClassData.overall].filter(g => g && g.data && g.data.totalStudents > 0);
+                                        const svgW = 780;
+                                        const svgH = isPrint ? 245 : 275;
+                                        const padL = 44;
+                                        const padR = 24;
+                                        const padT = 28;
+                                        const padB = 42;
+                                        const plotW = svgW - padL - padR;
+                                        const plotH = svgH - padT - padB;
+                                        const subCount = chartSubjects.length;
+                                        const groupW = plotW / subCount;
+                                        const barCount = Math.max(1, groupsToPlot.length);
+                                        const barW = Math.min(26, Math.max(10, (groupW * 0.74) / barCount));
+
+                                        const getY = (v) => {
+                                            const clamped = Math.max(minY, Math.min(maxY, v));
+                                            return padT + plotH - ((clamped - minY) / (maxY - minY || 1)) * plotH;
+                                        };
+
+                                        return (
+                                            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3 sm:p-4">
+                                                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <h4 className="text-xs sm:text-sm font-extrabold text-slate-800">
+                                                            📊 【{activeExam.name}】クラス間 教科別比較グラフ
+                                                        </h4>
+                                                        {!isPrint && (
+                                                            <div className="flex flex-wrap items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
+                                                                {overviewStatOptions.map(opt => (
+                                                                    <button
+                                                                        key={opt.key}
+                                                                        type="button"
+                                                                        onClick={() => setClassCompareConfig(prev => ({ ...prev, overviewStatKey: opt.key }))}
+                                                                        className={`px-2 py-0.5 rounded text-[11px] font-bold transition-colors ${
+                                                                            overviewStatKey === opt.key ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-600 hover:bg-white'
+                                                                        }`}
+                                                                    >
+                                                                        {opt.label}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex flex-wrap items-center gap-3">
+                                                        {groupsToPlot.map(g => (
+                                                            <span key={g.className} className="inline-flex items-center gap-1.5 text-xs font-extrabold text-slate-700">
+                                                                <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: g.palette.color }}></span>
+                                                                {g.palette.label}（{g.data.examineeCount}名）
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                <div className="overflow-x-auto">
+                                                    <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full h-auto min-w-[500px] select-none">
+                                                        {ticks.map(t => {
+                                                            const y = getY(t);
+                                                            return (
+                                                                <g key={t}>
+                                                                    <line x1={padL} y1={y} x2={svgW - padR} y2={y} stroke="#e2e8f0" strokeWidth="1" />
+                                                                    <text x={padL - 8} y={y + 4} textAnchor="end" fontSize="11" fill="#64748b">
+                                                                        {t}{currentOpt.unit}
+                                                                    </text>
+                                                                </g>
+                                                            );
+                                                        })}
+                                                        {chartSubjects.map((sub, sIdx) => {
+                                                            const centerX = padL + sIdx * groupW + groupW / 2;
+                                                            const totalBarsW = barCount * barW + (barCount - 1) * 3;
+                                                            const startX = centerX - totalBarsW / 2;
+                                                            return (
+                                                                <g key={sub}>
+                                                                    {groupsToPlot.map((g, bIdx) => {
+                                                                        const st = g.data.subjectStats[sub];
+                                                                        const val = st ? st[overviewStatKey] : null;
+                                                                        if (val === null || val === undefined) return null;
+                                                                        const x = startX + bIdx * (barW + 3);
+                                                                        const y = getY(val);
+                                                                        const h = Math.max(2, padT + plotH - y);
+                                                                        return (
+                                                                            <g key={g.className}>
+                                                                                <rect
+                                                                                    x={x}
+                                                                                    y={y}
+                                                                                    width={barW}
+                                                                                    height={h}
+                                                                                    rx="3"
+                                                                                    fill={g.palette.color}
+                                                                                    opacity={g.palette.isAll ? '0.65' : '0.92'}
+                                                                                />
+                                                                                <text
+                                                                                    x={x + barW / 2}
+                                                                                    y={y - 5}
+                                                                                    textAnchor="middle"
+                                                                                    fontSize="9.5"
+                                                                                    fontWeight="bold"
+                                                                                    fill={g.palette.color}
+                                                                                >
+                                                                                    {Number(val).toFixed(1)}
+                                                                                </text>
+                                                                            </g>
+                                                                        );
+                                                                    })}
+                                                                    <text x={centerX} y={svgH - padB + 20} textAnchor="middle" fontSize="11.5" fontWeight="bold" fill="#334155">
+                                                                        {sub}
+                                                                    </text>
+                                                                </g>
+                                                            );
+                                                        })}
+                                                    </svg>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* 2. 多項目 クラス間比較一覧テーブル（平均・A-B差・中央値・最高/最低・標準偏差・上位/下位率） */}
+                                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                                        <div className="px-4 py-2.5 bg-slate-800 text-white flex flex-wrap justify-between items-center gap-2">
+                                            <span className="text-xs sm:text-sm font-bold">
+                                                📋 【{activeExam.name}】クラス別 多項目比較一覧表（平均・中央値・最高/最低・標準偏差・上位/下位率）
+                                            </span>
+                                            {firstCls && secondCls && (
+                                                <span className="text-[11px] text-amber-300 font-bold">
+                                                    ★ 差分行は「{firstCls.palette.label} − {secondCls.palette.label}」を表示（プラス＝{firstCls.palette.label}がリード、マイナス＝{secondCls.palette.label}がリード）
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="overflow-x-auto">
+                                            <table className="report-table w-full text-xs text-center whitespace-nowrap border-separate border-spacing-0">
+                                                <thead className="bg-slate-100 text-slate-600">
+                                                    <tr>
+                                                        <th className="px-3 py-2 text-left font-bold border-b border-slate-200 sticky left-0 bg-slate-100 z-20 min-w-[115px]">比較項目</th>
+                                                        <th className="px-2 py-2 font-bold border-b border-slate-200 sticky left-[115px] bg-slate-100 z-20 min-w-[80px]">クラス</th>
+                                                        <th className="px-2 py-2 font-bold border-b border-slate-200 min-w-[64px]">受験者</th>
+                                                        {compareSubjects.map(sub => (
+                                                            <th key={sub} className="px-2 py-2 font-bold border-b border-slate-200 min-w-[76px]">{sub}</th>
+                                                        ))}
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100">
+                                                    {/* ① 平均点（平均偏差値）セクション */}
+                                                    {singleExamClassData.classes.map((clsObj, cIdx) => (
+                                                        <tr key={`avg_${clsObj.className}`} className="hover:bg-slate-50">
+                                                            {cIdx === 0 && (
+                                                                <td rowSpan={singleExamClassData.classes.length + (firstCls && secondCls ? 2 : 1)} className="px-3 py-2 text-left font-extrabold text-slate-800 bg-slate-50 sticky left-0 z-10 border-b-2 border-slate-300 border-r">
+                                                                    ① 平均点<br/><span className="text-[10px] font-normal text-slate-500">（平均偏差値）</span>
+                                                                </td>
+                                                            )}
+                                                            <td className="px-2 py-2 font-extrabold sticky left-[115px] bg-white z-10 border-b border-slate-100">
+                                                                <span className={`px-2 py-0.5 rounded-full text-xs ${clsObj.palette.bg} ${clsObj.palette.text} border ${clsObj.palette.border}`}>
+                                                                    {clsObj.palette.label}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-2 py-2 font-mono font-bold text-slate-600 border-b border-slate-100 border-r">
+                                                                {clsObj.data.examineeCount}名
+                                                            </td>
+                                                            {compareSubjects.map(sub => {
+                                                                const st = clsObj.data.subjectStats[sub];
+                                                                return (
+                                                                    <td key={sub} className="px-2 py-2 font-mono font-extrabold text-[13.5px] text-slate-800 border-b border-l border-slate-100">
+                                                                        {st ? st.avg.toFixed(1) : '-'}
+                                                                    </td>
+                                                                );
+                                                            })}
+                                                        </tr>
+                                                    ))}
+                                                    {/* A組 - B組 平均差 */}
+                                                    {firstCls && secondCls && (
+                                                        <tr className="bg-amber-50/60">
+                                                            <td className="px-2 py-1.5 font-extrabold text-[11px] text-amber-900 sticky left-[115px] bg-amber-50 z-10 border-b border-slate-200">
+                                                                {firstCls.palette.label}−{secondCls.palette.label} 差
+                                                            </td>
+                                                            <td className="px-2 py-1.5 text-[10px] text-slate-400 border-b border-slate-200 border-r">-</td>
+                                                            {compareSubjects.map(sub => {
+                                                                const stA = firstCls.data.subjectStats[sub];
+                                                                const stB = secondCls.data.subjectStats[sub];
+                                                                if (!stA || !stB) return <td key={sub} className="px-2 py-1.5 border-b border-l border-slate-200 text-slate-300">-</td>;
+                                                                const diff = stA.avg - stB.avg;
+                                                                const colorCls = diff > 0.04 ? 'text-red-600' : (diff < -0.04 ? 'text-blue-600' : 'text-slate-500');
+                                                                return (
+                                                                    <td key={sub} className={`px-2 py-1.5 font-mono font-extrabold text-xs border-b border-l border-slate-200 ${colorCls}`}>
+                                                                        {diff > 0 ? `+${diff.toFixed(1)}` : diff.toFixed(1)}
+                                                                    </td>
+                                                                );
+                                                            })}
+                                                        </tr>
+                                                    )}
+                                                    {/* 学年全体 平均 */}
+                                                    {singleExamClassData.overall && (
+                                                        <tr className="bg-slate-100/80">
+                                                            <td className="px-2 py-2 font-extrabold text-xs text-slate-700 sticky left-[115px] bg-slate-100 z-10 border-b-2 border-slate-300">
+                                                                学年全体
+                                                            </td>
+                                                            <td className="px-2 py-2 font-mono font-bold text-slate-600 border-b-2 border-slate-300 border-r">
+                                                                {singleExamClassData.overall.data.examineeCount}名
+                                                            </td>
+                                                            {compareSubjects.map(sub => {
+                                                                const st = singleExamClassData.overall.data.subjectStats[sub];
+                                                                return (
+                                                                    <td key={sub} className="px-2 py-2 font-mono font-extrabold text-slate-700 border-b-2 border-l border-slate-300">
+                                                                        {st ? st.avg.toFixed(1) : '-'}
+                                                                    </td>
+                                                                );
+                                                            })}
+                                                        </tr>
+                                                    )}
+
+                                                    {/* ② 中央値（メジアン）セクション */}
+                                                    {singleExamClassData.classes.map((clsObj, cIdx) => (
+                                                        <tr key={`med_${clsObj.className}`} className="hover:bg-slate-50">
+                                                            {cIdx === 0 && (
+                                                                <td rowSpan={singleExamClassData.classes.length} className="px-3 py-2 text-left font-extrabold text-slate-800 bg-slate-50 sticky left-0 z-10 border-b-2 border-slate-300 border-r">
+                                                                    ② 中央値<br/><span className="text-[10px] font-normal text-slate-500">（メジアン）</span>
+                                                                </td>
+                                                            )}
+                                                            <td className={`px-2 py-2 font-extrabold sticky left-[115px] bg-white z-10 ${cIdx === singleExamClassData.classes.length - 1 ? 'border-b-2 border-slate-300' : 'border-b border-slate-100'}`}>
+                                                                <span className={`px-2 py-0.5 rounded-full text-xs ${clsObj.palette.bg} ${clsObj.palette.text} border ${clsObj.palette.border}`}>
+                                                                    {clsObj.palette.label}
+                                                                </span>
+                                                            </td>
+                                                            <td className={`px-2 py-2 font-mono text-slate-500 border-r ${cIdx === singleExamClassData.classes.length - 1 ? 'border-b-2 border-slate-300' : 'border-b border-slate-100'}`}>
+                                                                {clsObj.data.examineeCount}名
+                                                            </td>
+                                                            {compareSubjects.map(sub => {
+                                                                const st = clsObj.data.subjectStats[sub];
+                                                                return (
+                                                                    <td key={sub} className={`px-2 py-2 font-mono font-bold text-slate-800 border-l ${cIdx === singleExamClassData.classes.length - 1 ? 'border-b-2 border-slate-300' : 'border-b border-slate-100'}`}>
+                                                                        {st ? st.median.toFixed(1) : '-'}
+                                                                    </td>
+                                                                );
+                                                            })}
+                                                        </tr>
+                                                    ))}
+
+                                                    {/* ③ 最高点 ／ 最低点 セクション */}
+                                                    {singleExamClassData.classes.map((clsObj, cIdx) => (
+                                                        <tr key={`maxmin_${clsObj.className}`} className="hover:bg-slate-50">
+                                                            {cIdx === 0 && (
+                                                                <td rowSpan={singleExamClassData.classes.length} className="px-3 py-2 text-left font-extrabold text-slate-800 bg-slate-50 sticky left-0 z-10 border-b-2 border-slate-300 border-r">
+                                                                    ③ 最高 / 最低
+                                                                </td>
+                                                            )}
+                                                            <td className={`px-2 py-2 font-extrabold sticky left-[115px] bg-white z-10 ${cIdx === singleExamClassData.classes.length - 1 ? 'border-b-2 border-slate-300' : 'border-b border-slate-100'}`}>
+                                                                <span className={`px-2 py-0.5 rounded-full text-xs ${clsObj.palette.bg} ${clsObj.palette.text} border ${clsObj.palette.border}`}>
+                                                                    {clsObj.palette.label}
+                                                                </span>
+                                                            </td>
+                                                            <td className={`px-2 py-2 font-mono text-slate-500 border-r ${cIdx === singleExamClassData.classes.length - 1 ? 'border-b-2 border-slate-300' : 'border-b border-slate-100'}`}>
+                                                                {clsObj.data.examineeCount}名
+                                                            </td>
+                                                            {compareSubjects.map(sub => {
+                                                                const st = clsObj.data.subjectStats[sub];
+                                                                return (
+                                                                    <td key={sub} className={`px-2 py-2 font-mono text-[11px] border-l ${cIdx === singleExamClassData.classes.length - 1 ? 'border-b-2 border-slate-300' : 'border-b border-slate-100'}`}>
+                                                                        {st ? (
+                                                                            <span>
+                                                                                <strong className="text-red-600">{formatScore(st.max, sub)}</strong>
+                                                                                <span className="text-slate-300 mx-0.5">/</span>
+                                                                                <strong className="text-blue-600">{formatScore(st.min, sub)}</strong>
+                                                                            </span>
+                                                                        ) : '-'}
+                                                                    </td>
+                                                                );
+                                                            })}
+                                                        </tr>
+                                                    ))}
+
+                                                    {/* ④ 標準偏差（ばらつき）セクション */}
+                                                    {singleExamClassData.classes.map((clsObj, cIdx) => (
+                                                        <tr key={`sd_${clsObj.className}`} className="hover:bg-slate-50">
+                                                            {cIdx === 0 && (
+                                                                <td rowSpan={singleExamClassData.classes.length} className="px-3 py-2 text-left font-extrabold text-slate-800 bg-slate-50 sticky left-0 z-10 border-b-2 border-slate-300 border-r">
+                                                                    ④ 標準偏差<br/><span className="text-[10px] font-normal text-slate-500">（点数のばらつき）</span>
+                                                                </td>
+                                                            )}
+                                                            <td className={`px-2 py-2 font-extrabold sticky left-[115px] bg-white z-10 ${cIdx === singleExamClassData.classes.length - 1 ? 'border-b-2 border-slate-300' : 'border-b border-slate-100'}`}>
+                                                                <span className={`px-2 py-0.5 rounded-full text-xs ${clsObj.palette.bg} ${clsObj.palette.text} border ${clsObj.palette.border}`}>
+                                                                    {clsObj.palette.label}
+                                                                </span>
+                                                            </td>
+                                                            <td className={`px-2 py-2 font-mono text-slate-500 border-r ${cIdx === singleExamClassData.classes.length - 1 ? 'border-b-2 border-slate-300' : 'border-b border-slate-100'}`}>
+                                                                {clsObj.data.examineeCount}名
+                                                            </td>
+                                                            {compareSubjects.map(sub => {
+                                                                const st = clsObj.data.subjectStats[sub];
+                                                                return (
+                                                                    <td key={sub} className={`px-2 py-2 font-mono font-bold text-slate-600 border-l ${cIdx === singleExamClassData.classes.length - 1 ? 'border-b-2 border-slate-300' : 'border-b border-slate-100'}`}>
+                                                                        {st ? st.stdDev.toFixed(1) : '-'}
+                                                                    </td>
+                                                                );
+                                                            })}
+                                                        </tr>
+                                                    ))}
+
+                                                    {/* ⑤ 上位基準到達人数・割合（80点以上 / 偏差値60以上など） */}
+                                                    {singleExamClassData.classes.map((clsObj, cIdx) => (
+                                                        <tr key={`high_${clsObj.className}`} className="hover:bg-slate-50">
+                                                            {cIdx === 0 && (
+                                                                <td rowSpan={singleExamClassData.classes.length} className="px-3 py-2 text-left font-extrabold text-emerald-800 bg-emerald-50/50 sticky left-0 z-10 border-b-2 border-slate-300 border-r">
+                                                                    ⑤ 上位層人数<br/><span className="text-[10px] font-normal text-emerald-700">（80点/偏差値60以上）</span>
+                                                                </td>
+                                                            )}
+                                                            <td className={`px-2 py-2 font-extrabold sticky left-[115px] bg-white z-10 ${cIdx === singleExamClassData.classes.length - 1 ? 'border-b-2 border-slate-300' : 'border-b border-slate-100'}`}>
+                                                                <span className={`px-2 py-0.5 rounded-full text-xs ${clsObj.palette.bg} ${clsObj.palette.text} border ${clsObj.palette.border}`}>
+                                                                    {clsObj.palette.label}
+                                                                </span>
+                                                            </td>
+                                                            <td className={`px-2 py-2 font-mono text-slate-500 border-r ${cIdx === singleExamClassData.classes.length - 1 ? 'border-b-2 border-slate-300' : 'border-b border-slate-100'}`}>
+                                                                {clsObj.data.examineeCount}名
+                                                            </td>
+                                                            {compareSubjects.map(sub => {
+                                                                const st = clsObj.data.subjectStats[sub];
+                                                                return (
+                                                                    <td key={sub} className={`px-2 py-2 font-mono border-l ${cIdx === singleExamClassData.classes.length - 1 ? 'border-b-2 border-slate-300' : 'border-b border-slate-100'}`}>
+                                                                        {st ? (
+                                                                            <div className="flex flex-col items-center leading-tight">
+                                                                                <span className="font-extrabold text-emerald-700">{st.highCount}人</span>
+                                                                                <span className="text-[10px] text-slate-400">({st.highRate.toFixed(1)}%)</span>
+                                                                            </div>
+                                                                        ) : '-'}
+                                                                    </td>
+                                                                );
+                                                            })}
+                                                        </tr>
+                                                    ))}
+
+                                                    {/* ⑥ 下位要注意人数・割合（50点未満 / 偏差値45未満など） */}
+                                                    {singleExamClassData.classes.map((clsObj, cIdx) => (
+                                                        <tr key={`low_${clsObj.className}`} className="hover:bg-slate-50">
+                                                            {cIdx === 0 && (
+                                                                <td rowSpan={singleExamClassData.classes.length} className="px-3 py-2 text-left font-extrabold text-rose-800 bg-rose-50/50 sticky left-0 z-10 border-r">
+                                                                    ⑥ 要注意層人数<br/><span className="text-[10px] font-normal text-rose-700">（50点/偏差値45未満）</span>
+                                                                </td>
+                                                            )}
+                                                            <td className="px-2 py-2 font-extrabold sticky left-[115px] bg-white z-10 border-b border-slate-100">
+                                                                <span className={`px-2 py-0.5 rounded-full text-xs ${clsObj.palette.bg} ${clsObj.palette.text} border ${clsObj.palette.border}`}>
+                                                                    {clsObj.palette.label}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-2 py-2 font-mono text-slate-500 border-b border-slate-100 border-r">
+                                                                {clsObj.data.examineeCount}名
+                                                            </td>
+                                                            {compareSubjects.map(sub => {
+                                                                const st = clsObj.data.subjectStats[sub];
+                                                                return (
+                                                                    <td key={sub} className="px-2 py-2 font-mono border-b border-l border-slate-100">
+                                                                        {st ? (
+                                                                            <div className="flex flex-col items-center leading-tight">
+                                                                                <span className="font-extrabold text-rose-700">{st.lowCount}人</span>
+                                                                                <span className="text-[10px] text-slate-400">({st.lowRate.toFixed(1)}%)</span>
+                                                                            </div>
+                                                                        ) : '-'}
+                                                                    </td>
+                                                                );
+                                                            })}
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+
+                            {/* サブタブ②：点数・偏差値 階層分布 ＆ 10点/偏差値10刻み累積比較 */}
+                            {singleSubTab === 'distribution' && (
+                                <div className="space-y-4">
+                                    {/* 対象科目の選択バー */}
+                                    {!isPrint && (
+                                        <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex flex-wrap items-center gap-1.5">
+                                            <span className="text-xs font-bold text-slate-600 mr-1">分布・階層を比較する科目を選択:</span>
+                                            {compareSubjects.map(sub => (
+                                                <button
+                                                    key={sub}
+                                                    type="button"
+                                                    onClick={() => setClassCompareConfig(prev => ({ ...prev, distSubject: sub }))}
+                                                    className={`px-3 py-1 rounded-full text-xs font-extrabold border transition-all ${
+                                                        distSubject === sub
+                                                            ? 'bg-slate-800 text-white border-slate-800 shadow-sm'
+                                                            : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'
+                                                    }`}
+                                                >
+                                                    {sub}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                        {/* 左：階層別ヒストグラム（人数＆割合の横棒比較） */}
+                                        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                                            <div className="px-4 py-2.5 bg-slate-800 text-white font-bold text-xs sm:text-sm">
+                                                📊 【{activeExam.name} ／ {distSubject}】得点・偏差値帯 分布比較
+                                            </div>
+                                            <div className="p-4 space-y-3">
+                                                {distributionBands.map(band => {
+                                                    return (
+                                                        <div key={band.label} className="border-b border-slate-100 pb-2.5 last:border-b-0 last:pb-0">
+                                                            <div className="text-xs font-extrabold text-slate-700 mb-1.5">{band.label}</div>
+                                                            <div className="space-y-1.5">
+                                                                {singleExamClassData.classes.map(clsObj => {
+                                                                    const st = clsObj.data.subjectStats[distSubject];
+                                                                    const vals = st ? st.values : [];
+                                                                    const cnt = vals.filter(v => v >= band.min && v < band.max).length;
+                                                                    const rate = vals.length > 0 ? (cnt / vals.length) * 100 : 0;
+                                                                    return (
+                                                                        <div key={clsObj.className} className="flex items-center gap-2 text-xs">
+                                                                            <span className={`w-12 text-center font-extrabold py-0.5 rounded text-[11px] ${clsObj.palette.bg} ${clsObj.palette.text}`}>
+                                                                                {clsObj.palette.label}
+                                                                            </span>
+                                                                            <div className="flex-1 bg-slate-100 h-4 rounded-full overflow-hidden">
+                                                                                <div
+                                                                                    className="h-full rounded-full transition-all"
+                                                                                    style={{ width: `${Math.min(100, rate)}%`, backgroundColor: clsObj.palette.color }}
+                                                                                ></div>
+                                                                            </div>
+                                                                            <span className="w-24 text-right font-mono font-bold text-slate-700">
+                                                                                {cnt}人 <span className="text-[10.5px] text-slate-400">({rate.toFixed(1)}%)</span>
+                                                                            </span>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+
+                                        {/* 右：10点刻み／偏差値10刻み「以上」「未満」累積人数・割合比較表 */}
+                                        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                                            <div className="px-4 py-2.5 bg-slate-800 text-white font-bold text-xs sm:text-sm">
+                                                📋 【{activeExam.name} ／ {distSubject}】基準値別「以上 / 未満」クラス比較表
+                                            </div>
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full text-xs text-center whitespace-nowrap border-separate border-spacing-0">
+                                                    <thead className="bg-slate-100 text-slate-600">
+                                                        <tr>
+                                                            <th className="px-3 py-2 text-left font-bold border-b border-slate-200">基準値</th>
+                                                            {singleExamClassData.classes.map(clsObj => (
+                                                                <th key={`gte_${clsObj.className}`} className="px-2 py-2 font-bold border-b border-slate-200">
+                                                                    <span style={{ color: clsObj.palette.color }}>{clsObj.palette.label}（以上）</span>
+                                                                </th>
+                                                            ))}
+                                                            {singleExamClassData.classes.map(clsObj => (
+                                                                <th key={`lt_${clsObj.className}`} className="px-2 py-2 font-bold border-b border-slate-200 border-l">
+                                                                    <span style={{ color: clsObj.palette.color }}>{clsObj.palette.label}（未満）</span>
+                                                                </th>
+                                                            ))}
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-slate-100">
+                                                        {[...cumulativeThresholds].reverse().map(th => (
+                                                            <tr key={th} className="hover:bg-slate-50">
+                                                                <td className="px-3 py-2 text-left font-extrabold text-slate-800 border-b border-slate-100 bg-slate-50/60">
+                                                                    {distSubject.includes('偏差値') ? `偏差値 ${th}` : `${th}点`}
+                                                                </td>
+                                                                {singleExamClassData.classes.map(clsObj => {
+                                                                    const st = clsObj.data.subjectStats[distSubject];
+                                                                    const vals = st ? st.values : [];
+                                                                    const gteCnt = vals.filter(v => v >= th).length;
+                                                                    const gteRate = vals.length > 0 ? (gteCnt / vals.length) * 100 : 0;
+                                                                    return (
+                                                                        <td key={`g_${clsObj.className}`} className="px-2 py-2 font-mono border-b border-slate-100">
+                                                                            <span className="font-extrabold text-slate-800">{gteCnt}人</span>
+                                                                            <span className="text-[10px] text-slate-400 ml-1">({gteRate.toFixed(1)}%)</span>
+                                                                        </td>
+                                                                    );
+                                                                })}
+                                                                {singleExamClassData.classes.map(clsObj => {
+                                                                    const st = clsObj.data.subjectStats[distSubject];
+                                                                    const vals = st ? st.values : [];
+                                                                    const ltCnt = vals.filter(v => v < th).length;
+                                                                    const ltRate = vals.length > 0 ? (ltCnt / vals.length) * 100 : 0;
+                                                                    return (
+                                                                        <td key={`l_${clsObj.className}`} className="px-2 py-2 font-mono border-b border-l border-slate-100">
+                                                                            <span className="font-bold text-slate-600">{ltCnt}人</span>
+                                                                            <span className="text-[10px] text-slate-400 ml-1">({ltRate.toFixed(1)}%)</span>
+                                                                        </td>
+                                                                    );
+                                                                })}
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* サブタブ③：学年上位層（TOP10 / TOP20 / TOP30）のクラス別シェア比較 */}
+                            {singleSubTab === 'top_share' && (
+                                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                                    <div className="px-4 py-2.5 bg-slate-800 text-white flex flex-wrap justify-between items-center gap-2">
+                                        <span className="text-xs sm:text-sm font-bold">
+                                            🏆 【{activeExam.name}】教科別 学年上位層（TOP 10 / TOP 20 / TOP 30）のクラス別人数シェア
+                                        </span>
+                                        <span className="text-[11px] text-slate-300">※同点の場合は全員含めた人数で集計</span>
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-xs text-center whitespace-nowrap border-separate border-spacing-0">
+                                            <thead className="bg-slate-100 text-slate-600">
+                                                <tr>
+                                                    <th className="px-3 py-2 text-left font-bold border-b border-slate-200 min-w-[100px]">科目</th>
+                                                    <th className="px-3 py-2 font-bold border-b border-slate-200 min-w-[210px]">学年 TOP 10 内訳</th>
+                                                    <th className="px-3 py-2 font-bold border-b border-slate-200 border-l min-w-[210px]">学年 TOP 20 内訳</th>
+                                                    <th className="px-3 py-2 font-bold border-b border-slate-200 border-l min-w-[210px]">学年 TOP 30 内訳</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {topShareBySubject.map(row => {
+                                                    const renderShareCell = (shareObj) => {
+                                                        const total = shareObj.total || 1;
+                                                        return (
+                                                            <div className="flex flex-col gap-1 px-2">
+                                                                <div className="flex items-center justify-between text-[11.5px] font-mono">
+                                                                    {singleExamClassData.classes.map(clsObj => {
+                                                                        const c = shareObj.counts[clsObj.className] || 0;
+                                                                        return (
+                                                                            <span key={clsObj.className} className="font-extrabold" style={{ color: clsObj.palette.color }}>
+                                                                                {clsObj.palette.label}: {c}人
+                                                                            </span>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                                <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden flex">
+                                                                    {singleExamClassData.classes.map(clsObj => {
+                                                                        const c = shareObj.counts[clsObj.className] || 0;
+                                                                        const pct = (c / total) * 100;
+                                                                        return (
+                                                                            <div
+                                                                                key={clsObj.className}
+                                                                                style={{ width: `${pct}%`, backgroundColor: clsObj.palette.color }}
+                                                                                className="h-full"
+                                                                            ></div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    };
+
+                                                    return (
+                                                        <tr key={row.subject} className="hover:bg-slate-50">
+                                                            <td className="px-3 py-2.5 text-left font-extrabold text-slate-800 border-b border-slate-100 bg-slate-50/60">
+                                                                {row.subject}
+                                                            </td>
+                                                            <td className="px-2 py-2 border-b border-slate-100">{renderShareCell(row.top10)}</td>
+                                                            <td className="px-2 py-2 border-b border-l border-slate-100">{renderShareCell(row.top20)}</td>
+                                                            <td className="px-2 py-2 border-b border-l border-slate-100">{renderShareCell(row.top30)}</td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ========================================================= */}
+                    {/* モード②：通年推移でのクラス間比較（A組 vs B組 vs 学年全体） */}
+                    {/* ========================================================= */}
+                    {mode === 'trend' && (
+                        <div className="space-y-4">
+                            {(() => {
+                                const isCount = trendMetricType === 'count_gte' || trendMetricType === 'count_lt' || trendMetricType === 'top_n';
+                                const isRate = trendMetricType === 'rate_gte' || trendMetricType === 'rate_lt';
+                                const isDev = !isCount && !isRate && trendSubject.includes('偏差値');
+
+                                let minY = 0, maxY = 100, step = 20;
+                                if (isCount) {
+                                    let maxVal = 10;
+                                    classTrendSeries.forEach(s => {
+                                        // 学年全体の人数に引きずられないよう、TOP_N以外はクラスごとの最大人数を基準にする
+                                        if (s.key === 'ALL' && trendMetricType !== 'top_n') return;
+                                        s.points.forEach(pt => {
+                                            if (pt.val !== null && pt.val > maxVal) maxVal = pt.val;
+                                        });
+                                    });
+                                    minY = 0;
+                                    if (maxVal <= 10) { maxY = 10; step = 2; }
+                                    else if (maxVal <= 25) { maxY = Math.ceil(maxVal / 5) * 5; step = 5; }
+                                    else if (maxVal <= 45) { maxY = Math.ceil(maxVal / 10) * 10; step = 10; }
+                                    else { maxY = Math.ceil(maxVal / 20) * 20; step = 20; }
+                                } else if (isRate) {
+                                    minY = 0; maxY = 100; step = 20;
+                                } else if (isDev) {
+                                    minY = 30; maxY = 80; step = 10;
+                                } else if (trendSubject === '5教科総点') {
+                                    minY = 100; maxY = 450; step = 50;
+                                } else if (trendSubject === '9教科総点') {
+                                    minY = 200; maxY = 850; step = 100;
+                                } else if (trendSubject === '3教科点数') {
+                                    minY = 50; maxY = 300; step = 50;
+                                }
+
+                                const ticks = [];
+                                for (let t = minY; t <= maxY; t += step) ticks.push(t);
+
+                                const svgW = 780;
+                                const svgH = isPrint ? 255 : 290;
+                                const padL = 52;
+                                const padR = 26;
+                                const padT = 26;
+                                const padB = 50;
+                                const plotW = svgW - padL - padR;
+                                const plotH = svgH - padT - padB;
+                                const count = typeExams.length;
+
+                                const getX = (i) => {
+                                    if (count <= 1) return padL + plotW / 2;
+                                    const offset = count <= 6 ? 48 : 34;
+                                    return padL + offset + (i / (count - 1)) * (plotW - offset * 2);
+                                };
+                                const getY = (v) => {
+                                    const clamped = Math.max(minY, Math.min(maxY, v));
+                                    return padT + plotH - ((clamped - minY) / (maxY - minY || 1)) * plotH;
+                                };
+
+                                // グラフに描画するシリーズ（人数カウントモード時は学年全体を除外してクラス同士を見やすくする）
+                                const seriesToDraw = isCount
+                                    ? classTrendSeries.filter(s => s.key !== 'ALL')
+                                    : classTrendSeries;
+
+                                const metricTitle = (() => {
+                                    const thLabel = trendSubject.includes('偏差値') ? `偏差値${trendThreshold}` : `${trendThreshold}点`;
+                                    if (trendMetricType === 'average') return `${trendSubject}（平均推移）`;
+                                    if (trendMetricType === 'median') return `${trendSubject}（中央値推移）`;
+                                    if (trendMetricType === 'count_gte') return `${trendSubject}（${thLabel}以上の人数推移）`;
+                                    if (trendMetricType === 'rate_gte') return `${trendSubject}（${thLabel}以上の割合%推移）`;
+                                    if (trendMetricType === 'count_lt') return `${trendSubject}（${thLabel}未満の人数推移）`;
+                                    if (trendMetricType === 'top_n') return `${trendSubject}（学年TOP ${trendTopN}以内のクラス別人数推移）`;
+                                    return trendSubject;
+                                })();
+
+                                return (
+                                    <>
+                                        {/* 1. クラス間 通年推移折れ線グラフ */}
+                                        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3 sm:p-4">
+                                            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                                                <h4 className="text-xs sm:text-sm font-extrabold text-slate-800">
+                                                    📈 {currentCohort.name} クラス間 通年推移グラフ：【{metricTitle}】
+                                                </h4>
+                                                <div className="flex flex-wrap items-center gap-3">
+                                                    {seriesToDraw.map(s => (
+                                                        <span key={s.key} className="inline-flex items-center gap-1.5 text-xs font-extrabold text-slate-700">
+                                                            <span
+                                                                className="w-3 h-3 rounded-full"
+                                                                style={{
+                                                                    backgroundColor: s.palette.color,
+                                                                    border: s.palette.isAll ? '2px dashed white' : 'none'
+                                                                }}
+                                                            ></span>
+                                                            {s.palette.label}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            {count === 0 ? (
+                                                <div className="py-10 text-center text-slate-400 text-xs">試験データがありません</div>
+                                            ) : (
+                                                <div className="overflow-x-auto">
+                                                    <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full h-auto min-w-[500px] select-none">
+                                                        {ticks.map(t => {
+                                                            const y = getY(t);
+                                                            return (
+                                                                <g key={t}>
+                                                                    <line x1={padL} y1={y} x2={svgW - padR} y2={y} stroke="#e2e8f0" strokeWidth="1" />
+                                                                    <text x={padL - 8} y={y + 4} textAnchor="end" fontSize="11" fill="#64748b">
+                                                                        {isCount ? `${t}人` : (isRate ? `${t}%` : t)}
+                                                                    </text>
+                                                                </g>
+                                                            );
+                                                        })}
+                                                        {typeExams.map((ex, i) => {
+                                                            const x = getX(i);
+                                                            return (
+                                                                <g key={ex.id}>
+                                                                    <line x1={x} y1={padT} x2={x} y2={svgH - padB} stroke="#f1f5f9" strokeWidth="1" />
+                                                                    <text x={x} y={svgH - padB + 20} textAnchor="middle" fontSize="10.5" fontWeight="bold" fill="#334155">
+                                                                        {ex.name}
+                                                                    </text>
+                                                                </g>
+                                                            );
+                                                        })}
+                                                        {seriesToDraw.map((series, sIdx) => {
+                                                            const validPts = [];
+                                                            series.points.forEach((pt, i) => {
+                                                                if (pt.val !== null && pt.val !== undefined) {
+                                                                    validPts.push({ x: getX(i), y: getY(pt.val), val: pt.val });
+                                                                }
+                                                            });
+                                                            if (validPts.length === 0) return null;
+                                                            const pathD = validPts.map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+                                                            return (
+                                                                <g key={series.key}>
+                                                                    {validPts.length > 1 && (
+                                                                        <path
+                                                                            d={pathD}
+                                                                            fill="none"
+                                                                            stroke={series.palette.color}
+                                                                            strokeWidth={series.palette.isAll ? '2.5' : '3'}
+                                                                            strokeDasharray={series.palette.isAll ? '5 4' : 'none'}
+                                                                            strokeLinecap="round"
+                                                                            strokeLinejoin="round"
+                                                                        />
+                                                                    )}
+                                                                    {validPts.map((p, idx) => (
+                                                                        <g key={idx}>
+                                                                            <circle cx={p.x} cy={p.y} r="4.5" fill={series.palette.color} stroke="#fff" strokeWidth="1.8" />
+                                                                            <text
+                                                                                x={p.x}
+                                                                                y={p.y - 8 - (sIdx % 2) * 5}
+                                                                                textAnchor="middle"
+                                                                                fontSize="10.5"
+                                                                                fontWeight="bold"
+                                                                                fill={series.palette.color}
+                                                                                stroke="#ffffff"
+                                                                                strokeWidth="3"
+                                                                                style={{ paintOrder: 'stroke' }}
+                                                                            >
+                                                                                {isCount ? `${Math.round(p.val)}人` : (isRate ? `${Number(p.val).toFixed(1)}%` : Number(p.val).toFixed(1))}
+                                                                            </text>
+                                                                        </g>
+                                                                    ))}
+                                                                </g>
+                                                            );
+                                                        })}
+                                                    </svg>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* 2. クラス間 通年推移マトリクス表（A組・B組・A-B差・学年全体） */}
+                                        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                                            <div className="px-4 py-2.5 bg-slate-800 text-white flex justify-between items-center">
+                                                <span className="text-xs sm:text-sm font-bold">
+                                                    📋 【{metricTitle}】クラス別・試験別 推移一覧表
+                                                </span>
+                                            </div>
+                                            <div className="overflow-x-auto">
+                                                <table className="report-table w-full text-xs text-center whitespace-nowrap border-separate border-spacing-0">
+                                                    <thead className="bg-slate-100 text-slate-600">
+                                                        <tr>
+                                                            <th className="px-3 py-2 text-left font-bold border-b border-slate-200 sticky left-0 bg-slate-100 z-10 min-w-[100px]">クラス</th>
+                                                            {typeExams.map(ex => (
+                                                                <th key={ex.id} className="px-2.5 py-2 font-bold border-b border-slate-200 min-w-[90px]">{ex.name}</th>
+                                                            ))}
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-slate-100">
+                                                        {classTrendSeries.map(series => (
+                                                            <tr key={series.key} className={`${series.palette.isAll ? 'bg-slate-50 font-bold' : 'hover:bg-slate-50'}`}>
+                                                                <td className="px-3 py-2.5 text-left font-extrabold sticky left-0 bg-white z-10 border-b border-slate-100">
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: series.palette.color }}></span>
+                                                                        <span className="text-slate-800">{series.palette.label}</span>
+                                                                    </div>
+                                                                </td>
+                                                                {series.points.map(pt => (
+                                                                    <td key={pt.examId} className="px-2.5 py-2 border-b border-l border-slate-100 font-mono">
+                                                                        {pt.val !== null ? (
+                                                                            <div className="flex flex-col items-center leading-tight">
+                                                                                <span className="text-[13px] font-extrabold text-slate-800">
+                                                                                    {isCount ? `${Math.round(pt.val)}人` : (isRate ? `${Number(pt.val).toFixed(1)}%` : Number(pt.val).toFixed(1))}
+                                                                                </span>
+                                                                                {pt.rate !== undefined && isCount && (
+                                                                                    <span className="text-[9.5px] text-slate-400">({pt.rate.toFixed(1)}%)</span>
+                                                                                )}
+                                                                            </div>
+                                                                        ) : <span className="text-slate-300">-</span>}
+                                                                    </td>
+                                                                ))}
+                                                            </tr>
+                                                        ))}
+                                                        {/* A組 - B組 の推移差分行 */}
+                                                        {classTrendSeries.length >= 3 && (
+                                                            <tr className="bg-amber-50/60">
+                                                                <td className="px-3 py-2 text-left font-extrabold text-amber-900 sticky left-0 bg-amber-50 z-10 border-b border-slate-200">
+                                                                    {classTrendSeries[0].palette.label} − {classTrendSeries[1].palette.label} 差
+                                                                </td>
+                                                                {typeExams.map((ex, idx) => {
+                                                                    const ptA = classTrendSeries[0].points[idx];
+                                                                    const ptB = classTrendSeries[1].points[idx];
+                                                                    if (!ptA || !ptB || ptA.val === null || ptB.val === null) {
+                                                                        return <td key={ex.id} className="px-2.5 py-2 border-b border-l border-slate-200 text-slate-300">-</td>;
+                                                                    }
+                                                                    const diff = ptA.val - ptB.val;
+                                                                    const colorCls = diff > 0.04 ? 'text-red-600' : (diff < -0.04 ? 'text-blue-600' : 'text-slate-500');
+                                                                    return (
+                                                                        <td key={ex.id} className={`px-2.5 py-2 font-mono font-extrabold text-xs border-b border-l border-slate-200 ${colorCls}`}>
+                                                                            {isCount
+                                                                                ? `${diff > 0 ? `+${Math.round(diff)}` : Math.round(diff)}人`
+                                                                                : (isRate ? `${diff > 0 ? `+${diff.toFixed(1)}` : diff.toFixed(1)}pt` : (diff > 0 ? `+${diff.toFixed(1)}` : diff.toFixed(1)))}
+                                                                        </td>
+                                                                    );
+                                                                })}
+                                                            </tr>
+                                                        )}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </>
+                                );
+                            })()}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
         // --- ランキング表セクション表示コンポーネント（画面＆印刷共用） ---
         const RankingSectionView = ({ section, isPrint = false, onSelectStudent = null }) => {
             if (!section || !section.columns || section.columns.length === 0) return null;
@@ -2078,7 +3592,7 @@
 
         // --- Main Application Component ---
         const App = () => {
-            // Cohort State (v5.2: 複数期生の管理)
+            // Cohort State (v5.3: 複数期生の管理 + 編集・削除用の状態変数を完備)
             const [cohorts, setCohorts] = useState([{ id: 'cohort_default', name: '29期生', order: 0 }]);
             const [selectedCohortId, setSelectedCohortId] = useState('cohort_default');
             const [isCohortModalOpen, setIsCohortModalOpen] = useState(false);
@@ -2087,7 +3601,7 @@
             const [editingCohortName, setEditingCohortName] = useState('');
             const [confirmDeleteCohortId, setConfirmDeleteCohortId] = useState(null);
 
-            // Cross-Cohort Comparison State (v5.2: 過年度比較 パターンA + 10点/偏差値10刻み人数推移)
+            // Cross-Cohort Comparison State (過年度比較 パターンA)
             const [isCohortCompareOpen, setIsCohortCompareOpen] = useState(false);
             const [compareConfig, setCompareConfig] = useState({
                 examType: 'regular',
@@ -2099,6 +3613,21 @@
                 trendAlignMode: 'name',
                 trendMetricType: 'average',
                 trendThreshold: 80
+            });
+
+            // Class Comparison State (v5.3: 同じ期生内でのA組 vs B組 クラス間比較)
+            const [isClassCompareOpen, setIsClassCompareOpen] = useState(false);
+            const [classCompareConfig, setClassCompareConfig] = useState({
+                examType: 'regular',
+                mode: 'single',
+                selectedExamId: '',
+                singleSubTab: 'overview',
+                overviewStatKey: 'avg',
+                distSubject: '5教科平均点',
+                trendSubject: '5教科平均点',
+                trendMetricType: 'average',
+                trendThreshold: 80,
+                trendTopN: 20
             });
 
             // State
@@ -3235,6 +4764,15 @@
                 }, 500);
             };
 
+            const triggerPrintClassCompare = () => {
+                setPrintModeType('class_compare');
+                setIsPrinting(true);
+                setTimeout(() => {
+                    window.print();
+                    setIsPrinting(false);
+                }, 500);
+            };
+
             const executePrintFromSettings = () => {
                 let targets = [];
                 if (printConfig.mode === 'all') {
@@ -3415,14 +4953,14 @@
                                 <div className="bg-blue-600 p-2 rounded-lg shrink-0">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                                 </div>
-                                <h1 className="text-xl font-bold tracking-wider hidden lg:block whitespace-nowrap">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-1">v5.2</span></h1>
+                                <h1 className="text-xl font-bold tracking-wider hidden lg:block whitespace-nowrap">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-1">v5.3</span></h1>
 
-                                {/* 期生（学年）クイック切替＆管理バー */}
+                                {/* 期生（学年）クイック切替＆管理バー（3年周期カラー対応） */}
                                 <div className="flex items-center bg-slate-800 rounded-lg p-1 border border-slate-700 gap-1 ml-1">
                                     <div className="flex items-center gap-1 overflow-x-auto max-w-[200px] sm:max-w-[320px] no-scrollbar">
                                         {cohorts.map((c, idx) => {
                                             const active = c.id === currentCohort.id;
-                                            const palette = getCohortPalette(c, idx);
+                                            const pal = getCohortPalette(c, idx);
                                             return (
                                                 <button
                                                     key={c.id}
@@ -3431,17 +4969,13 @@
                                                         setSelectedCohortId(c.id);
                                                         setSelectedStudentId(null);
                                                     }}
-                                                    style={active ? { backgroundColor: palette.color } : {}}
                                                     className={`px-2.5 py-1 rounded text-xs font-extrabold whitespace-nowrap transition-all flex items-center gap-1.5 ${
                                                         active
-                                                            ? 'text-white shadow-sm'
+                                                            ? pal.activeBtn
                                                             : 'text-slate-300 hover:text-white hover:bg-slate-700'
                                                     }`}
                                                 >
-                                                    <span
-                                                        className="w-2 h-2 rounded-full shrink-0"
-                                                        style={{ backgroundColor: active ? '#ffffff' : palette.color }}
-                                                    ></span>
+                                                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: active ? '#ffffff' : pal.color }}></span>
                                                     {c.name}
                                                 </button>
                                             );
@@ -3449,13 +4983,35 @@
                                     </div>
                                     <button
                                         type="button"
-                                        onClick={() => setIsCohortModalOpen(true)}
+                                        onClick={() => {
+                                            setEditingCohortId(null);
+                                            setConfirmDeleteCohortId(null);
+                                            setIsCohortModalOpen(true);
+                                        }}
                                         className="px-2 py-1 rounded text-[11px] font-bold bg-slate-700 hover:bg-slate-600 text-amber-300 flex items-center gap-1 shrink-0 transition-colors"
                                         title="期生（28期生・29期生・30期生など）の追加・名称変更・管理"
                                     >
                                         <IconPlus /> 期生設定
                                     </button>
                                 </div>
+
+                                {/* クラス間比較（A組 vs B組）起動ボタン */}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setClassCompareConfig(prev => ({
+                                            ...prev,
+                                            examType: activeTab,
+                                            selectedExamId: selectedExamId || ''
+                                        }));
+                                        setIsClassCompareOpen(true);
+                                    }}
+                                    className="bg-rose-600 hover:bg-rose-500 text-white text-xs font-extrabold px-3 py-1.5 rounded-lg border border-rose-400/40 flex items-center gap-1.5 shadow-sm transition-colors shrink-0"
+                                    title="同じ期生内のクラス間比較（A組 vs B組）を開きます"
+                                >
+                                    <IconUsers />
+                                    <span>クラス間比較</span>
+                                </button>
 
                                 {/* 過年度比較（パターンA）起動ボタン */}
                                 <button
@@ -3623,6 +5179,19 @@
                                                 </p>
                                             </div>
                                             <div className="flex flex-wrap items-center gap-2">
+                                                <button 
+                                                    onClick={() => {
+                                                        setClassCompareConfig(prev => ({
+                                                            ...prev,
+                                                            examType: activeTab,
+                                                            selectedExamId: selectedExamId || ''
+                                                        }));
+                                                        setIsClassCompareOpen(true);
+                                                    }}
+                                                    className="text-xs bg-rose-50 hover:bg-rose-100 text-rose-800 font-extrabold py-1.5 px-3 rounded border border-rose-300 flex items-center gap-1.5 shadow-sm transition-colors"
+                                                >
+                                                    <IconUsers /> A組・B組 クラス比較
+                                                </button>
                                                 <button 
                                                     onClick={() => {
                                                         setRankingClassFilter('ALL');
@@ -4221,6 +5790,71 @@
                             </div>
                         )}
 
+                        {}
+                        {/* --- CLASS COMPARISON MODAL (v5.3: 同一期生内 A組 vs B組 クラス間比較) --- */}
+                        {isClassCompareOpen && (
+                            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-40 p-2 sm:p-4" onClick={() => setIsClassCompareOpen(false)}>
+                                <div
+                                    className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col overflow-hidden"
+                                    onClick={e => e.stopPropagation()}
+                                >
+                                    <div className="bg-slate-900 text-white px-4 py-3 sm:px-6 sm:py-4 flex flex-wrap justify-between items-center gap-3 shrink-0">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-rose-600 text-white rounded-lg flex items-center justify-center font-extrabold shadow-inner shrink-0">
+                                                <IconUsers />
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-500 text-white">
+                                                        同一期生内 クラス分析
+                                                    </span>
+                                                    <span className="text-xs text-slate-300 font-bold">
+                                                        {currentCohort.name}（A組 vs B組 多項目比較）
+                                                    </span>
+                                                </div>
+                                                <h2 className="text-lg sm:text-xl font-bold leading-tight mt-0.5">
+                                                    クラス間比較（平均・中央値・最高/最低・分布・上位層シェア・通年推移）
+                                                </h2>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-2 ml-auto">
+                                            <button
+                                                type="button"
+                                                onClick={triggerPrintClassCompare}
+                                                className="text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-3 rounded-lg border border-emerald-500 flex items-center gap-1.5 shadow-sm transition-colors"
+                                            >
+                                                <IconPrinter /> クラス比較シートを印刷 / PDF出力
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsClassCompareOpen(false)}
+                                                className="text-slate-400 hover:text-white transition-colors bg-slate-800 p-2 rounded-full shrink-0"
+                                            >
+                                                <IconX />
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-4 sm:p-6 overflow-y-auto bg-slate-50 flex-1">
+                                        <ClassComparisonView
+                                            cohorts={cohorts}
+                                            currentCohort={currentCohort}
+                                            onSelectCohort={(cId) => {
+                                                setSelectedCohortId(cId);
+                                                setSelectedStudentId(null);
+                                            }}
+                                            cohortExams={currentCohortExams}
+                                            records={records}
+                                            classCompareConfig={classCompareConfig}
+                                            setClassCompareConfig={setClassCompareConfig}
+                                            isPrint={false}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* --- CROSS-COHORT COMPARISON MODAL (v5.0: 過年度比較 パターンA) --- */}
                         {isCohortCompareOpen && (
                             <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-40 p-2 sm:p-4" onClick={() => setIsCohortCompareOpen(false)}>
@@ -4448,6 +6082,22 @@
 
                     {/* --- PRINT ONLY TEMPLATE (Hides during normal viewing) --- */}
                     <div className="print-only">
+                        {/* クラス間比較（A組 vs B組）の印刷シート */}
+                        {isPrinting && printModeType === 'class_compare' && (
+                            <div className="print-sheet">
+                                <ClassComparisonView
+                                    cohorts={cohorts}
+                                    currentCohort={currentCohort}
+                                    onSelectCohort={() => {}}
+                                    cohortExams={currentCohortExams}
+                                    records={records}
+                                    classCompareConfig={classCompareConfig}
+                                    setClassCompareConfig={setClassCompareConfig}
+                                    isPrint={true}
+                                />
+                            </div>
+                        )}
+
                         {/* 過年度比較（パターンA）の印刷シート */}
                         {isPrinting && printModeType === 'cohort_compare' && (
                             <div className="print-sheet">
