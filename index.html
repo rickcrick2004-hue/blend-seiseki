@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BLEND 成績推移トラッカー v5.1</title>
+    <title>BLEND 成績推移トラッカー v5.2</title>
     <!-- React & Babelのバージョンを安定版に固定 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
@@ -735,15 +735,35 @@
         const IconEdit = () => <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>;
         const IconPlus = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
 
-        // 期生（コホート）別のカラーパレット定義
+        // 期生（コホート）別のカラーパレット定義（3年周期：28期生=緑、29期生=赤、30期生=青）
+        const COHORT_COLOR_THEMES = {
+            green: { color: '#16a34a', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-300', badge: 'bg-emerald-600', lightBg: '#dcfce7' },
+            red:   { color: '#ef4444', bg: 'bg-red-50',     text: 'text-red-700',     border: 'border-red-300',     badge: 'bg-red-600',     lightBg: '#fee2e2' },
+            blue:  { color: '#2563eb', bg: 'bg-blue-50',    text: 'text-blue-700',    border: 'border-blue-300',    badge: 'bg-blue-600',    lightBg: '#dbeafe' }
+        };
+
         const COHORT_PALETTE = [
-            { color: '#2563eb', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-300', badge: 'bg-blue-600', lightBg: '#dbeafe' },
-            { color: '#10b981', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-300', badge: 'bg-emerald-600', lightBg: '#d1fae5' },
-            { color: '#f97316', bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-300', badge: 'bg-orange-500', lightBg: '#ffedd5' },
-            { color: '#a855f7', bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-300', badge: 'bg-purple-600', lightBg: '#f3e8ff' },
-            { color: '#ec4899', bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-300', badge: 'bg-pink-600', lightBg: '#fce7f3' },
-            { color: '#0891b2', bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-300', badge: 'bg-cyan-600', lightBg: '#cffafe' }
+            COHORT_COLOR_THEMES.red,   // 29期生など (余り2)
+            COHORT_COLOR_THEMES.blue,  // 30期生など (余り0)
+            COHORT_COLOR_THEMES.green  // 28期生など (余り1)
         ];
+
+        // 期生名に含まれる数字から3年周期の学年カラー（28期=緑、29期=赤、30期=青）を自動判定するヘルパー関数
+        const getCohortPalette = (cohortOrName, fallbackIdx = 0) => {
+            const rawName = typeof cohortOrName === 'string' ? cohortOrName : (cohortOrName?.name || '');
+            const halfName = rawName.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+            const match = halfName.match(/(\d+)\s*期/) || halfName.match(/(\d+)/);
+            if (match) {
+                const num = parseInt(match[1], 10);
+                if (!isNaN(num)) {
+                    const mod = num % 3;
+                    if (mod === 1) return COHORT_COLOR_THEMES.green; // 25, 28, 31期生... -> 緑
+                    if (mod === 2) return COHORT_COLOR_THEMES.red;   // 26, 29, 32期生... -> 赤
+                    if (mod === 0) return COHORT_COLOR_THEMES.blue;  // 27, 30, 33期生... -> 青
+                }
+            }
+            return COHORT_PALETTE[fallbackIdx % COHORT_PALETTE.length];
+        };
 
         // 生徒レコードから指定科目のスコアを取得するヘルパー関数（5教科・9教科の総点・平均点の自動補完対応）
         const getStudentSubjectScore = (record, subject) => {
@@ -1085,7 +1105,7 @@
             // 各期生の試験別データ算出（モード①用）
             const singleComparisonRows = useMemo(() => {
                 return cohorts.map((cohort, idx) => {
-                    const palette = COHORT_PALETTE[idx % COHORT_PALETTE.length];
+                    const palette = getCohortPalette(cohort, idx);
                     const cohortExams = typeExams.filter(e => (e.cohortId || cohorts[0]?.id) === cohort.id);
                     const targetExamId = customExamMap[cohort.id];
                     const exam = cohortExams.find(e => e.id === targetExamId) || null;
@@ -1133,7 +1153,7 @@
 
             const trendSeries = useMemo(() => {
                 return cohorts.map((cohort, idx) => {
-                    const palette = COHORT_PALETTE[idx % COHORT_PALETTE.length];
+                    const palette = getCohortPalette(cohort, idx);
                     const cohortExams = typeExams.filter(e => (e.cohortId || cohorts[0]?.id) === cohort.id);
                     const points = trendAxisItems.map((axisItem) => {
                         let targetExam = null;
@@ -2058,14 +2078,16 @@
 
         // --- Main Application Component ---
         const App = () => {
-            // Cohort State (v5.0: 複数期生の管理)
+            // Cohort State (v5.2: 複数期生の管理)
             const [cohorts, setCohorts] = useState([{ id: 'cohort_default', name: '29期生', order: 0 }]);
             const [selectedCohortId, setSelectedCohortId] = useState('cohort_default');
             const [isCohortModalOpen, setIsCohortModalOpen] = useState(false);
             const [newCohortNameInput, setNewCohortNameInput] = useState('');
             const [editingCohortId, setEditingCohortId] = useState(null);
-            // Cross-Cohort Comparison State (v5.1: 過年度比較 パターンA + 点数・偏差値別の人数推移対応)
-            // Cross-Cohort Comparison State (v5.1: 過年度比較 パターンA + 10点/偏差値10刻み人数推移)
+            const [editingCohortName, setEditingCohortName] = useState('');
+            const [confirmDeleteCohortId, setConfirmDeleteCohortId] = useState(null);
+
+            // Cross-Cohort Comparison State (v5.2: 過年度比較 パターンA + 10点/偏差値10刻み人数推移)
             const [isCohortCompareOpen, setIsCohortCompareOpen] = useState(false);
             const [compareConfig, setCompareConfig] = useState({
                 examType: 'regular',
@@ -3393,13 +3415,14 @@
                                 <div className="bg-blue-600 p-2 rounded-lg shrink-0">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                                 </div>
-                                <h1 className="text-xl font-bold tracking-wider hidden lg:block whitespace-nowrap">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-1">v5.1</span></h1>
+                                <h1 className="text-xl font-bold tracking-wider hidden lg:block whitespace-nowrap">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-1">v5.2</span></h1>
 
                                 {/* 期生（学年）クイック切替＆管理バー */}
                                 <div className="flex items-center bg-slate-800 rounded-lg p-1 border border-slate-700 gap-1 ml-1">
                                     <div className="flex items-center gap-1 overflow-x-auto max-w-[200px] sm:max-w-[320px] no-scrollbar">
                                         {cohorts.map((c, idx) => {
                                             const active = c.id === currentCohort.id;
+                                            const palette = getCohortPalette(c, idx);
                                             return (
                                                 <button
                                                     key={c.id}
@@ -3408,12 +3431,17 @@
                                                         setSelectedCohortId(c.id);
                                                         setSelectedStudentId(null);
                                                     }}
-                                                    className={`px-2.5 py-1 rounded text-xs font-extrabold whitespace-nowrap transition-all ${
+                                                    style={active ? { backgroundColor: palette.color } : {}}
+                                                    className={`px-2.5 py-1 rounded text-xs font-extrabold whitespace-nowrap transition-all flex items-center gap-1.5 ${
                                                         active
-                                                            ? 'bg-blue-600 text-white shadow-sm'
+                                                            ? 'text-white shadow-sm'
                                                             : 'text-slate-300 hover:text-white hover:bg-slate-700'
                                                     }`}
                                                 >
+                                                    <span
+                                                        className="w-2 h-2 rounded-full shrink-0"
+                                                        style={{ backgroundColor: active ? '#ffffff' : palette.color }}
+                                                    ></span>
                                                     {c.name}
                                                 </button>
                                             );
@@ -4050,7 +4078,7 @@
                                             <div className="space-y-2">
                                                 {cohorts.map((c, idx) => {
                                                     const isSelected = c.id === currentCohort.id;
-                                                    const palette = COHORT_PALETTE[idx % COHORT_PALETTE.length];
+                                                    const palette = getCohortPalette(c, idx);
                                                     const defaultId = cohorts[0].id;
                                                     const cExamCount = exams.filter(e => (e.cohortId || defaultId) === c.id).length;
 
