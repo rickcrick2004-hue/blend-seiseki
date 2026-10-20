@@ -853,6 +853,53 @@
             };
         };
 
+        // 特定の試験・科目において、指定した基準値「以上」または「未満」の人数・割合を算出するヘルパー関数
+        const computeExamThresholdStats = (exam, allRecords, subject, metricType, threshold) => {
+            if (!exam || !subject) return null;
+            const examRecords = allRecords.filter(r => r.examId === exam.id);
+            if (examRecords.length === 0) return { count: 0, validTotal: 0, ratio: 0 };
+
+            let matchCount = 0;
+            let validTotal = 0;
+            const numThreshold = Number(threshold);
+
+            examRecords.forEach(r => {
+                if (!r.scores) return;
+                const enriched = { ...r.scores };
+                const five = ['国語', '社会', '数学', '理科', '英語'];
+                const fiveVals = five.map(s => enriched[s]).filter(v => v !== undefined && v !== null && !isNaN(v));
+                if (fiveVals.length === 5) {
+                    const s5 = fiveVals.reduce((a, b) => a + Number(b), 0);
+                    if (enriched['5教科総点'] === undefined) enriched['5教科総点'] = s5;
+                    if (enriched['5教科平均点'] === undefined) enriched['5教科平均点'] = s5 / 5;
+                }
+                const nine = ['国語', '社会', '数学', '理科', '英語', '音楽', '美術', '保体', '技家'];
+                const nineVals = nine.map(s => enriched[s]).filter(v => v !== undefined && v !== null && !isNaN(v));
+                if (nineVals.length === 9) {
+                    const s9 = nineVals.reduce((a, b) => a + Number(b), 0);
+                    if (enriched['9教科総点'] === undefined) enriched['9教科総点'] = s9;
+                    if (enriched['9教科平均点'] === undefined) enriched['9教科平均点'] = s9 / 9;
+                }
+
+                const val = enriched[subject];
+                if (val !== undefined && val !== null && !isNaN(val)) {
+                    const numVal = Number(val);
+                    validTotal += 1;
+                    if (metricType === 'count_gte' && numVal >= numThreshold) {
+                        matchCount += 1;
+                    } else if (metricType === 'count_lt' && numVal < numThreshold) {
+                        matchCount += 1;
+                    }
+                }
+            });
+
+            return {
+                count: matchCount,
+                validTotal,
+                ratio: validTotal > 0 ? (matchCount / validTotal) * 100 : 0
+            };
+        };
+
         // --- 過年度比較（期生間比較：パターンA）コンポーネント（画面＆印刷共用） ---
         const CrossCohortComparisonView = ({
             cohorts,
@@ -870,12 +917,11 @@
                 baseCohortId,
                 trendSubject,
                 trendAlignMode,
-                trendMetric = 'average',
-                trendScoreThreshold = 80,
-                trendDevThreshold = 60
+                trendMetricType = 'average', // 'average' | 'count_gte' | 'count_lt'
+                trendThreshold = 80
             } = compareConfig;
 
-            const isCountMode = trendMetric === 'gte' || trendMetric === 'lt';
+            const isCountMode = trendMetricType === 'count_gte' || trendMetricType === 'count_lt';
 
             // 選択中の試験種別に該当する全期生の試験一覧
             const typeExams = useMemo(() => {
@@ -938,6 +984,20 @@
                 return compareSubjects;
             }, [compareSubjects, examType, isCountMode]);
 
+            // 10点刻み／偏差値10刻みの選択肢リスト
+            const thresholdOptions = useMemo(() => {
+                if (examType === 'benesse') {
+                    return [30, 40, 50, 60, 70, 80];
+                }
+                if (trendSubject === '5教科総点') {
+                    return Array.from({ length: 49 }, (_, i) => (i + 1) * 10); // 10〜490点 (10点刻み)
+                }
+                if (trendSubject === '9教科総点') {
+                    return Array.from({ length: 89 }, (_, i) => (i + 1) * 10); // 10〜890点 (10点刻み)
+                }
+                return [10, 20, 30, 40, 50, 60, 70, 80, 90];
+            }, [examType, trendSubject]);
+
             // 棒グラフで表示する科目（100点満点系または偏差値系）
             const barChartSubjects = useMemo(() => {
                 if (examType === 'benesse') {
@@ -970,41 +1030,43 @@
                 }
             }, [normExamList, examType, cohorts]);
 
-            // 通年推移の科目が現在の選択可能リストに無い場合の自動補正（学推の点数→偏差値への自動切替も含む）
+            // 通年推移の科目および基準値（しきい値）の自動補正
             useEffect(() => {
+                let nextSubject = trendSubject;
                 if (trendSelectableSubjects.length > 0 && !trendSelectableSubjects.includes(trendSubject)) {
-                    if (examType === 'benesse' && isCountMode && trendSubject.includes('点数')) {
+                    if (examType === 'benesse') {
                         const mappedDev = trendSubject.replace('点数', '偏差値');
                         if (trendSelectableSubjects.includes(mappedDev)) {
-                            setCompareConfig(prev => ({ ...prev, trendSubject: mappedDev }));
-                            return;
+                            nextSubject = mappedDev;
+                        } else {
+                            nextSubject = trendSelectableSubjects.includes('3教科偏差値') ? '3教科偏差値' : trendSelectableSubjects[0];
                         }
+                    } else {
+                        nextSubject = trendSelectableSubjects.includes('5教科平均点') ? '5教科平均点' : trendSelectableSubjects[0];
                     }
-                    const defaultSub = examType === 'benesse' ? '3教科偏差値' : '5教科平均点';
+                }
+
+                let nextThreshold = trendThreshold;
+                if (!thresholdOptions.includes(Number(trendThreshold))) {
+                    if (examType === 'benesse') {
+                        nextThreshold = trendMetricType === 'count_lt' ? 40 : 60;
+                    } else if (nextSubject === '5教科総点') {
+                        nextThreshold = trendMetricType === 'count_lt' ? 250 : 400;
+                    } else if (nextSubject === '9教科総点') {
+                        nextThreshold = trendMetricType === 'count_lt' ? 450 : 720;
+                    } else {
+                        nextThreshold = trendMetricType === 'count_lt' ? 50 : 80;
+                    }
+                }
+
+                if (nextSubject !== trendSubject || nextThreshold !== trendThreshold) {
                     setCompareConfig(prev => ({
                         ...prev,
-                        trendSubject: trendSelectableSubjects.includes(defaultSub) ? defaultSub : trendSelectableSubjects[0]
+                        trendSubject: nextSubject,
+                        trendThreshold: nextThreshold
                     }));
                 }
-            }, [trendSelectableSubjects, trendSubject, examType, isCountMode]);
-
-            // 定期試験・学期総合において100点満点科目と総点科目を切り替えた際のしきい値自動補正
-            useEffect(() => {
-                if (examType === 'benesse') return;
-                if (trendSubject === '5教科総点') {
-                    if (trendScoreThreshold < 10 || trendScoreThreshold > 490 || trendScoreThreshold <= 90) {
-                        setCompareConfig(prev => ({ ...prev, trendScoreThreshold: 400 }));
-                    }
-                } else if (trendSubject === '9教科総点') {
-                    if (trendScoreThreshold < 10 || trendScoreThreshold > 890 || trendScoreThreshold <= 90) {
-                        setCompareConfig(prev => ({ ...prev, trendScoreThreshold: 720 }));
-                    }
-                } else {
-                    if (trendScoreThreshold > 90 || trendScoreThreshold < 10) {
-                        setCompareConfig(prev => ({ ...prev, trendScoreThreshold: 80 }));
-                    }
-                }
-            }, [trendSubject, examType]);
+            }, [trendSelectableSubjects, thresholdOptions, trendSubject, trendThreshold, examType, trendMetricType]);
 
             // 試験名ボタンをクリックした際に全期生の該当試験を一括セット
             const handleSelectNormExam = (normName) => {
@@ -1070,7 +1132,6 @@
             }, [trendAlignMode, cohorts, typeExams, normExamList]);
 
             const trendSeries = useMemo(() => {
-                const activeThreshold = examType === 'benesse' ? trendDevThreshold : trendScoreThreshold;
                 return cohorts.map((cohort, idx) => {
                     const palette = COHORT_PALETTE[idx % COHORT_PALETTE.length];
                     const cohortExams = typeExams.filter(e => (e.cohortId || cohorts[0]?.id) === cohort.id);
@@ -1084,14 +1145,13 @@
                         if (!targetExam) return { axisKey: axisItem.key, val: null, examName: null };
 
                         if (isCountMode) {
-                            const countSt = computeExamThresholdCount(targetExam, records, trendSubject, trendMetric, activeThreshold);
+                            const thStats = computeExamThresholdStats(targetExam, records, trendSubject, trendMetricType, trendThreshold);
                             return {
                                 axisKey: axisItem.key,
-                                val: countSt ? countSt.matchCount : null,
-                                validCount: countSt ? countSt.validCount : 0,
-                                rate: countSt ? countSt.rate : 0,
-                                examName: targetExam.name,
-                                examineeCount: countSt ? countSt.validCount : 0
+                                val: thStats ? thStats.count : null,
+                                validTotal: thStats ? thStats.validTotal : 0,
+                                ratio: thStats ? thStats.ratio : 0,
+                                examName: targetExam.name
                             };
                         } else {
                             const st = computeExamSummaryStats(targetExam, records);
@@ -1110,18 +1170,13 @@
                         points
                     };
                 });
-            }, [cohorts, typeExams, trendAxisItems, trendAlignMode, records, trendSubject, isCountMode, trendMetric, trendScoreThreshold, trendDevThreshold, examType]);
+            }, [cohorts, typeExams, trendAxisItems, trendAlignMode, records, trendSubject, isCountMode, trendMetricType, trendThreshold]);
 
             const typeTitle = examType === 'regular' ? '定期試験' : (examType === 'benesse' ? '学力推移調査' : '学期総合');
-            const activeThresholdVal = examType === 'benesse' ? trendDevThreshold : trendScoreThreshold;
-            const trendConditionSummary = useMemo(() => {
-                if (!isCountMode) return `${trendSubject}（平均推移）`;
-                const opText = trendMetric === 'gte' ? '以上' : '未満';
-                if (examType === 'benesse') {
-                    return `${trendSubject}（偏差値${activeThresholdVal}${opText}の人数）`;
-                }
-                return `${trendSubject}（${activeThresholdVal}点${opText}の人数）`;
-            }, [isCountMode, trendMetric, examType, trendSubject, activeThresholdVal]);
+            const metricUnitLabel = examType === 'benesse' ? `偏差値${trendThreshold}` : `${trendThreshold}点`;
+            const trendConditionSummary = isCountMode
+                ? `${trendSubject.replace('偏差値', '')}（${metricUnitLabel}${trendMetricType === 'count_gte' ? '以上' : '未満'}の人数）`
+                : `${trendSubject}（平均推移）`;
 
             return (
                 <div className={isPrint ? 'w-full' : 'space-y-5'}>
@@ -1142,30 +1197,138 @@
                     {/* 操作パネル（画面表示時のみ） */}
                     {!isPrint && (
                         <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200 shadow-sm space-y-3.5">
-                            {/* モード②：通年推移の科目選択＆点数/偏差値の人数推移設定＆横軸揃え方 */}
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                {/* 1. 試験種別タブ */}
+                                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
+                                    {[
+                                        { id: 'regular', label: '定期試験', activeCls: 'bg-blue-600 text-white shadow' },
+                                        { id: 'benesse', label: '学力推移調査', activeCls: 'bg-green-600 text-white shadow' },
+                                        { id: 'comprehensive', label: '学期総合', activeCls: 'bg-purple-600 text-white shadow' }
+                                    ].map(t => (
+                                        <button
+                                            key={t.id}
+                                            type="button"
+                                            onClick={() => setCompareConfig(prev => ({ ...prev, examType: t.id, selectedNormExamName: '' }))}
+                                            className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${examType === t.id ? t.activeCls : 'text-slate-600 hover:bg-white/60'}`}
+                                        >
+                                            {t.label}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {/* 2. 比較モード切替 */}
+                                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
+                                    <button
+                                        type="button"
+                                        onClick={() => setCompareConfig(prev => ({ ...prev, mode: 'single' }))}
+                                        className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${mode === 'single' ? 'bg-slate-800 text-white shadow' : 'text-slate-600 hover:bg-white/60'}`}
+                                    >
+                                        📊 試験別で期生間比較（例: 1年1学期中間）
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setCompareConfig(prev => ({ ...prev, mode: 'trend' }))}
+                                        className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${mode === 'trend' ? 'bg-slate-800 text-white shadow' : 'text-slate-600 hover:bg-white/60'}`}
+                                    >
+                                        📈 通年推移を期生間で重ねて比較
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* モード①：試験選択＆期生ごとの試験割り当てバー */}
+                            {mode === 'single' && (
+                                <div className="space-y-3 pt-2 border-t border-slate-100">
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                        <span className="text-xs font-bold text-slate-500 mr-1">比較する試験を一括選択:</span>
+                                        {normExamList.length === 0 ? (
+                                            <span className="text-xs text-slate-400">この種別の試験データがまだ登録されていません</span>
+                                        ) : (
+                                            normExamList.map(item => (
+                                                <button
+                                                    key={item.normName}
+                                                    type="button"
+                                                    onClick={() => handleSelectNormExam(item.normName)}
+                                                    className={`px-3 py-1 rounded-full text-xs font-bold border transition-all ${
+                                                        selectedNormExamName === item.normName
+                                                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                                            : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-blue-50'
+                                                    }`}
+                                                >
+                                                    {item.displayName}
+                                                </button>
+                                            ))
+                                        )}
+                                    </div>
+
+                                    {/* 各期生ごとの比較対象試験ドロップダウン（表記揺れや自由な組み合わせに対応） */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                                        {singleComparisonRows.map(({ cohort, palette, cohortExams, exam }) => (
+                                            <div key={cohort.id} className="bg-white p-2 rounded-lg border border-slate-200 flex flex-col gap-1 shadow-sm">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-slate-800">
+                                                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: palette.color }}></span>
+                                                        {cohort.name}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setCompareConfig(prev => ({ ...prev, baseCohortId: cohort.id }))}
+                                                        className={`text-[10px] px-1.5 py-0.5 rounded font-bold border transition-colors ${
+                                                            (baseRow && baseRow.cohort.id === cohort.id)
+                                                                ? 'bg-amber-100 text-amber-800 border-amber-300'
+                                                                : 'bg-slate-50 text-slate-400 border-slate-200 hover:text-slate-600'
+                                                        }`}
+                                                        title="差分（±）を計算する基準期生に設定します"
+                                                    >
+                                                        {(baseRow && baseRow.cohort.id === cohort.id) ? '★ 比較基準' : '基準にする'}
+                                                    </button>
+                                                </div>
+                                                <select
+                                                    value={exam ? exam.id : ''}
+                                                    onChange={(e) => setCompareConfig(prev => ({
+                                                        ...prev,
+                                                        customExamMap: { ...prev.customExamMap, [cohort.id]: e.target.value }
+                                                    }))}
+                                                    className="w-full text-xs border border-slate-300 rounded px-2 py-1 bg-slate-50 text-slate-700 font-medium outline-none focus:border-blue-500"
+                                                >
+                                                    <option value="">-- 該当なし / 非表示 --</option>
+                                                    {cohortExams.map(ce => (
+                                                        <option key={ce.id} value={ce.id}>{ce.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* モード②：通年推移の指標タイプ・科目・10点/偏差値10刻み設定バー */}
                             {mode === 'trend' && (
-                                <div className="space-y-3 pt-2.5 border-t border-slate-100">
-                                    {/* Step 1: 集計指標の選択（平均推移 ／ 以上の人数 ／ 未満の人数）＆ 横軸揃え方 */}
+                                <div className="space-y-3 pt-2 border-t border-slate-100">
+                                    {/* 集計方法（平均推移 / 以上人数 / 未満人数）と横軸揃え方 */}
                                     <div className="flex flex-wrap items-center justify-between gap-2">
                                         <div className="flex flex-wrap items-center gap-1.5">
-                                            <span className="text-xs font-bold text-slate-500 mr-1">表示する推移:</span>
+                                            <span className="text-xs font-bold text-slate-500 mr-1">比較する内容:</span>
                                             <div className="inline-flex flex-wrap items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
                                                 <button
                                                     type="button"
-                                                    onClick={() => setCompareConfig(prev => ({ ...prev, trendMetric: 'average' }))}
-                                                    className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
-                                                        trendMetric === 'average'
+                                                    onClick={() => setCompareConfig(prev => ({ ...prev, trendMetricType: 'average' }))}
+                                                    className={`px-2.5 py-1 rounded text-xs font-bold transition-all ${
+                                                        trendMetricType === 'average'
                                                             ? 'bg-blue-600 text-white shadow-sm'
                                                             : 'text-slate-600 hover:bg-white/70'
                                                     }`}
                                                 >
-                                                    📈 {examType === 'benesse' ? '平均値（点数・偏差値）' : '平均点の推移'}
+                                                    📈 {examType === 'benesse' ? '平均点・平均偏差値の推移' : '平均点の推移'}
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    onClick={() => setCompareConfig(prev => ({ ...prev, trendMetric: 'gte' }))}
-                                                    className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
-                                                        trendMetric === 'gte'
+                                                    onClick={() => setCompareConfig(prev => ({
+                                                        ...prev,
+                                                        trendMetricType: 'count_gte',
+                                                        trendThreshold: examType === 'benesse' ? 60 : (prev.trendSubject === '5教科総点' ? 400 : (prev.trendSubject === '9教科総点' ? 720 : 80))
+                                                    }))}
+                                                    className={`px-2.5 py-1 rounded text-xs font-bold transition-all ${
+                                                        trendMetricType === 'count_gte'
                                                             ? 'bg-emerald-600 text-white shadow-sm'
                                                             : 'text-slate-600 hover:bg-white/70'
                                                     }`}
@@ -1174,9 +1337,13 @@
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    onClick={() => setCompareConfig(prev => ({ ...prev, trendMetric: 'lt' }))}
-                                                    className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
-                                                        trendMetric === 'lt'
+                                                    onClick={() => setCompareConfig(prev => ({
+                                                        ...prev,
+                                                        trendMetricType: 'count_lt',
+                                                        trendThreshold: examType === 'benesse' ? 40 : (prev.trendSubject === '5教科総点' ? 250 : (prev.trendSubject === '9教科総点' ? 450 : 50))
+                                                    }))}
+                                                    className={`px-2.5 py-1 rounded text-xs font-bold transition-all ${
+                                                        trendMetricType === 'count_lt'
                                                             ? 'bg-rose-600 text-white shadow-sm'
                                                             : 'text-slate-600 hover:bg-white/70'
                                                     }`}
@@ -1204,125 +1371,72 @@
                                         </div>
                                     </div>
 
-                                    {/* Step 2: 比較する項目（教科・平均点・偏差値）の選択 */}
+                                    {/* 対象科目の選択 */}
                                     <div className="flex flex-wrap items-center gap-1.5">
-                                        <span className="text-xs font-bold text-slate-500 mr-1">
-                                            {examType === 'benesse' && isCountMode ? '対象とする偏差値項目:' : '比較する項目:'}
-                                        </span>
-                                        {trendSelectableSubjects.map(sub => (
-                                            <button
-                                                key={sub}
-                                                type="button"
-                                                onClick={() => setCompareConfig(prev => ({ ...prev, trendSubject: sub }))}
-                                                className={`px-2.5 py-1 rounded-full text-xs font-bold border transition-all ${
-                                                    trendSubject === sub
-                                                        ? 'bg-slate-800 text-white border-slate-800 shadow-sm'
-                                                        : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'
-                                                }`}
-                                            >
-                                                {sub}
-                                            </button>
-                                        ))}
+                                        <span className="text-xs font-bold text-slate-500 mr-1">対象科目:</span>
+                                        {trendSelectableSubjects.map(sub => {
+                                            const displayLabel = (examType === 'benesse' && isCountMode) ? sub.replace('偏差値', '') : sub;
+                                            return (
+                                                <button
+                                                    key={sub}
+                                                    type="button"
+                                                    onClick={() => setCompareConfig(prev => ({ ...prev, trendSubject: sub }))}
+                                                    className={`px-2.5 py-1 rounded-full text-xs font-bold border transition-all ${
+                                                        trendSubject === sub
+                                                            ? 'bg-slate-800 text-white border-slate-800 shadow-sm'
+                                                            : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'
+                                                    }`}
+                                                >
+                                                    {displayLabel}
+                                                </button>
+                                            );
+                                        })}
                                     </div>
 
-                                    {/* Step 3: 人数推移モード時の「10点刻み / 偏差値10刻み」しきい値選択バー */}
+                                    {/* 10点刻み／偏差値10刻みの基準値セレクター（人数推移モード時のみ表示） */}
                                     {isCountMode && (
-                                        <div className={`p-3 rounded-lg border flex flex-wrap items-center justify-between gap-2.5 ${
-                                            trendMetric === 'gte' ? 'bg-emerald-50/70 border-emerald-200' : 'bg-rose-50/70 border-rose-200'
-                                        }`}>
-                                            {examType === 'benesse' ? (
+                                        <div className="flex flex-wrap items-center gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                                            <span className="text-xs font-bold text-slate-700">
+                                                {examType === 'benesse' ? '基準偏差値（10刻み）:' : '基準点数（10点刻み）:'}
+                                            </span>
+                                            {thresholdOptions.length <= 12 ? (
                                                 <div className="flex flex-wrap items-center gap-1.5">
-                                                    <span className="text-xs font-extrabold text-slate-700 mr-1">
-                                                        基準偏差値（10刻み）:
-                                                    </span>
-                                                    {[30, 40, 50, 60, 70, 80].map(devVal => {
-                                                        const active = trendDevThreshold === devVal;
-                                                        const activeCls = trendMetric === 'gte'
+                                                    {thresholdOptions.map(val => {
+                                                        const active = Number(trendThreshold) === val;
+                                                        const activeColor = trendMetricType === 'count_gte'
                                                             ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
                                                             : 'bg-rose-600 text-white border-rose-600 shadow-sm';
                                                         return (
                                                             <button
-                                                                key={devVal}
+                                                                key={val}
                                                                 type="button"
-                                                                onClick={() => setCompareConfig(prev => ({ ...prev, trendDevThreshold: devVal }))}
+                                                                onClick={() => setCompareConfig(prev => ({ ...prev, trendThreshold: val }))}
                                                                 className={`px-3 py-1 rounded-md text-xs font-extrabold border transition-all ${
-                                                                    active ? activeCls : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                                                                    active ? activeColor : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
                                                                 }`}
                                                             >
-                                                                偏差値 {devVal} {trendMetric === 'gte' ? '以上' : '未満'}
+                                                                {examType === 'benesse' ? `偏差値 ${val}` : `${val}点`}
+                                                                {trendMetricType === 'count_gte' ? ' 以上' : ' 未満'}
                                                             </button>
                                                         );
                                                     })}
                                                 </div>
-                                            ) : (trendSubject === '5教科総点' || trendSubject === '9教科総点') ? (
+                                            ) : (
                                                 <div className="flex flex-wrap items-center gap-2">
-                                                    <span className="text-xs font-extrabold text-slate-700">
-                                                        基準点数（10点刻み）:
-                                                    </span>
                                                     <select
-                                                        value={trendScoreThreshold}
-                                                        onChange={e => setCompareConfig(prev => ({ ...prev, trendScoreThreshold: Number(e.target.value) }))}
-                                                        className="text-xs font-extrabold border border-slate-300 rounded-md px-2.5 py-1 bg-white text-slate-800 outline-none focus:border-blue-500"
+                                                        value={trendThreshold}
+                                                        onChange={e => setCompareConfig(prev => ({ ...prev, trendThreshold: Number(e.target.value) }))}
+                                                        className="text-xs font-extrabold border border-slate-300 rounded-md px-3 py-1.5 bg-white text-slate-800 outline-none focus:border-blue-500"
                                                     >
-                                                        {Array.from(
-                                                            { length: trendSubject === '5教科総点' ? 49 : 89 },
-                                                            (_, idx) => (idx + 1) * 10
-                                                        ).map(scoreVal => (
-                                                            <option key={scoreVal} value={scoreVal}>
-                                                                {scoreVal}点 {trendMetric === 'gte' ? '以上' : '未満'}
+                                                        {thresholdOptions.map(val => (
+                                                            <option key={val} value={val}>
+                                                                {val}点 {trendMetricType === 'count_gte' ? '以上' : '未満'}
                                                             </option>
                                                         ))}
                                                     </select>
-                                                    <div className="flex flex-wrap items-center gap-1 ml-1">
-                                                        {(trendSubject === '5教科総点' ? [200, 250, 300, 350, 400, 450] : [350, 450, 540, 630, 720, 810]).map(preset => (
-                                                            <button
-                                                                key={preset}
-                                                                type="button"
-                                                                onClick={() => setCompareConfig(prev => ({ ...prev, trendScoreThreshold: preset }))}
-                                                                className={`px-2 py-0.5 rounded text-[11px] font-bold border transition-colors ${
-                                                                    trendScoreThreshold === preset
-                                                                        ? (trendMetric === 'gte' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-rose-600 text-white border-rose-600')
-                                                                        : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'
-                                                                }`}
-                                                            >
-                                                                {preset}点
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <div className="flex flex-wrap items-center gap-1.5">
-                                                    <span className="text-xs font-extrabold text-slate-700 mr-1">
-                                                        基準点数（10点刻み）:
-                                                    </span>
-                                                    {[10, 20, 30, 40, 50, 60, 70, 80, 90].map(scoreVal => {
-                                                        const active = trendScoreThreshold === scoreVal;
-                                                        const activeCls = trendMetric === 'gte'
-                                                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                                                            : 'bg-rose-600 text-white border-rose-600 shadow-sm';
-                                                        return (
-                                                            <button
-                                                                key={scoreVal}
-                                                                type="button"
-                                                                onClick={() => setCompareConfig(prev => ({ ...prev, trendScoreThreshold: scoreVal }))}
-                                                                className={`px-2.5 py-1 rounded-md text-xs font-extrabold border transition-all ${
-                                                                    active ? activeCls : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
-                                                                }`}
-                                                            >
-                                                                {scoreVal}点{trendMetric === 'gte' ? '以上' : '未満'}
-                                                            </button>
-                                                        );
-                                                    })}
+                                                    <span className="text-[11px] text-slate-500">（10点刻みで選択可能）</span>
                                                 </div>
                                             )}
-
-                                            <span className={`text-xs font-extrabold px-2.5 py-1 rounded-full border ${
-                                                trendMetric === 'gte'
-                                                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                                                    : 'bg-rose-100 text-rose-800 border-rose-300'
-                                            }`}>
-                                                集計条件：{trendConditionSummary}
-                                            </span>
                                         </div>
                                     )}
                                 </div>
@@ -1330,7 +1444,6 @@
                         </div>
                     )}
 
-                    {}
                     {/* --- モード①：試験別の期生間比較表示 --- */}
                     {mode === 'single' && (
                         <div className="space-y-4">
@@ -1503,38 +1616,37 @@
                         </div>
                     )}
 
-                    {}
                     {/* --- モード②：通年推移の期生間比較表示 --- */}
                     {mode === 'trend' && (
                         <div className="space-y-4">
                             {/* 1. 通年推移 折れ線グラフ */}
                             {(() => {
-                                const isDev = trendSubject.includes('偏差値');
-                                const isTotal5 = trendSubject === '5教科総点';
-                                const isTotal9 = trendSubject === '9教科総点';
-                                const isTotal3 = trendSubject === '3教科点数';
-
                                 let minY = 0, maxY = 100, step = 20;
+
                                 if (isCountMode) {
-                                    minY = 0;
-                                    let maxPersonCount = 0;
+                                    let maxCountVal = 10;
                                     trendSeries.forEach(s => {
                                         s.points.forEach(pt => {
-                                            if (pt.val !== null && pt.val !== undefined && pt.val > maxPersonCount) {
-                                                maxPersonCount = pt.val;
+                                            if (pt.val !== null && pt.val !== undefined && pt.val > maxCountVal) {
+                                                maxCountVal = pt.val;
                                             }
                                         });
                                     });
-                                    if (maxPersonCount <= 5) { maxY = 5; step = 1; }
-                                    else if (maxPersonCount <= 10) { maxY = 10; step = 2; }
-                                    else if (maxPersonCount <= 25) { step = 5; maxY = Math.ceil((maxPersonCount + 2) / 5) * 5; }
-                                    else if (maxPersonCount <= 50) { step = 10; maxY = Math.ceil((maxPersonCount + 4) / 10) * 10; }
-                                    else if (maxPersonCount <= 120) { step = 20; maxY = Math.ceil((maxPersonCount + 8) / 20) * 20; }
+                                    minY = 0;
+                                    if (maxCountVal <= 10) { maxY = 10; step = 2; }
+                                    else if (maxCountVal <= 25) { maxY = Math.ceil(maxCountVal / 5) * 5; step = 5; }
+                                    else if (maxCountVal <= 50) { maxY = Math.ceil(maxCountVal / 10) * 10; step = 10; }
+                                    else if (maxCountVal <= 100) { maxY = Math.ceil(maxCountVal / 20) * 20; step = 20; }
                                     else {
-                                        step = Math.ceil(maxPersonCount / 5 / 10) * 10;
-                                        maxY = Math.ceil((maxPersonCount + step * 0.2) / step) * step;
+                                        step = Math.ceil(maxCountVal / 5 / 10) * 10;
+                                        maxY = Math.ceil(maxCountVal / step) * step;
                                     }
                                 } else {
+                                    const isDev = trendSubject.includes('偏差値');
+                                    const isTotal5 = trendSubject === '5教科総点';
+                                    const isTotal9 = trendSubject === '9教科総点';
+                                    const isTotal3 = trendSubject === '3教科点数';
+
                                     if (isDev) { minY = 30; maxY = 80; step = 10; }
                                     else if (isTotal5) { minY = 100; maxY = 450; step = 50; }
                                     else if (isTotal9) { minY = 200; maxY = 850; step = 100; }
@@ -1567,8 +1679,8 @@
                                 return (
                                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3 sm:p-4">
                                         <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                                            <h4 className="text-xs sm:text-sm font-bold text-slate-700 flex items-center gap-2">
-                                                <span>📈 期生間 通年推移グラフ：【{trendConditionSummary}】</span>
+                                            <h4 className="text-xs sm:text-sm font-bold text-slate-700">
+                                                📈 期生間 通年推移グラフ：【{trendConditionSummary}】
                                             </h4>
                                             <div className="flex flex-wrap items-center gap-3">
                                                 {trendSeries.map(s => (
@@ -1590,7 +1702,7 @@
                                                             <g key={t}>
                                                                 <line x1={padL} y1={y} x2={svgW - padR} y2={y} stroke="#e2e8f0" strokeWidth="1" />
                                                                 <text x={padL - 8} y={y + 4} textAnchor="end" fontSize="11" fill="#64748b">
-                                                                    {isCountMode ? `${t}名` : t}
+                                                                    {isCountMode ? `${t}人` : t}
                                                                 </text>
                                                             </g>
                                                         );
@@ -1634,7 +1746,7 @@
                                                                             strokeWidth="3"
                                                                             style={{ paintOrder: 'stroke' }}
                                                                         >
-                                                                            {isCountMode ? `${Math.round(p.val)}名` : Number(p.val).toFixed(1)}
+                                                                            {isCountMode ? `${Math.round(p.val)}人` : Number(p.val).toFixed(1)}
                                                                         </text>
                                                                     </g>
                                                                 ))}
@@ -1650,15 +1762,10 @@
 
                             {/* 2. 通年推移 マトリクス表 */}
                             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                                <div className="px-4 py-2.5 bg-slate-800 text-white flex flex-wrap justify-between items-center gap-2">
+                                <div className="px-4 py-2.5 bg-slate-800 text-white flex justify-between items-center">
                                     <span className="text-xs sm:text-sm font-bold">
                                         📋 【{trendConditionSummary}】期生別・試験別 推移一覧表
                                     </span>
-                                    {isCountMode && (
-                                        <span className="text-[11px] text-slate-300 font-medium">
-                                            ※ 下段の括弧内は（該当割合% ／ 受験者数）を表示
-                                        </span>
-                                    )}
                                 </div>
                                 <div className="overflow-x-auto">
                                     <table className="report-table w-full text-xs text-center whitespace-nowrap border-separate border-spacing-0">
@@ -1684,11 +1791,11 @@
                                                             {pt.val !== null ? (
                                                                 <div className="flex flex-col items-center">
                                                                     <span className="text-[13px] font-extrabold text-slate-800 font-mono">
-                                                                        {isCountMode ? `${Math.round(pt.val)}名` : Number(pt.val).toFixed(1)}
+                                                                        {isCountMode ? `${Math.round(pt.val)}人` : Number(pt.val).toFixed(1)}
                                                                     </span>
-                                                                    {isCountMode && pt.validCount > 0 && (
-                                                                        <span className="text-[10px] font-bold text-slate-500 mt-0.5">
-                                                                            ({pt.rate.toFixed(1)}% / {pt.validCount}名)
+                                                                    {isCountMode && pt.validTotal > 0 && (
+                                                                        <span className="text-[9.5px] text-slate-500 font-medium">
+                                                                            ({pt.ratio.toFixed(1)}% / {pt.validTotal}名)
                                                                         </span>
                                                                     )}
                                                                     {trendAlignMode === 'order' && pt.examName && (
@@ -1845,7 +1952,6 @@
                                         {col.label}
                                     </div>
 
-                                    {}
                                     {/* カラムサブヘッダー */}
                                     <div className="flex items-center bg-slate-100 text-slate-600 text-[10px] font-bold py-1 px-0.5 border-b border-slate-200">
                                         <div className="w-[18px] shrink-0 text-center">順</div>
@@ -1959,6 +2065,7 @@
             const [newCohortNameInput, setNewCohortNameInput] = useState('');
             const [editingCohortId, setEditingCohortId] = useState(null);
             // Cross-Cohort Comparison State (v5.1: 過年度比較 パターンA + 点数・偏差値別の人数推移対応)
+            // Cross-Cohort Comparison State (v5.1: 過年度比較 パターンA + 10点/偏差値10刻み人数推移)
             const [isCohortCompareOpen, setIsCohortCompareOpen] = useState(false);
             const [compareConfig, setCompareConfig] = useState({
                 examType: 'regular',
@@ -1968,9 +2075,8 @@
                 baseCohortId: 'cohort_default',
                 trendSubject: '5教科平均点',
                 trendAlignMode: 'name',
-                trendMetric: 'average',
-                trendScoreThreshold: 80,
-                trendDevThreshold: 60
+                trendMetricType: 'average',
+                trendThreshold: 80
             });
 
             // State
@@ -2822,7 +2928,7 @@
             const comprehensiveReportData = useMemo(() => {
                 if (!selectedStudentId) return null;
                 return getComprehensiveStudentReport(selectedStudentId);
-            }, [selectedStudentId, exams, records]);
+            }, [selectedStudentId, exams, records, currentCohortExams]);
 
             const currentStudentName = comprehensiveReportData && comprehensiveReportData.length > 0 ? comprehensiveReportData[0].rawName : selectedStudentId;
 
@@ -3289,7 +3395,6 @@
                                 </div>
                                 <h1 className="text-xl font-bold tracking-wider hidden lg:block whitespace-nowrap">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-1">v5.1</span></h1>
 
-                                {}
                                 {/* 期生（学年）クイック切替＆管理バー */}
                                 <div className="flex items-center bg-slate-800 rounded-lg p-1 border border-slate-700 gap-1 ml-1">
                                     <div className="flex items-center gap-1 overflow-x-auto max-w-[200px] sm:max-w-[320px] no-scrollbar">
@@ -3899,7 +4004,6 @@
                             </div>
                         )}
 
-                        {}
                         {/* --- COHORT MANAGEMENT MODAL (v5.0: 期生の追加・名前変更・並び替え) --- */}
                         {isCohortModalOpen && (
                             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setIsCohortModalOpen(false)}>
