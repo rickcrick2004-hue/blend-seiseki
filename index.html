@@ -6024,6 +6024,360 @@
                             </div>
                         )}
 
+                        {/* --- COHORT MANAGEMENT MODAL --- */}
+                        {isCohortModalOpen && (
+                            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => {
+                                setIsCohortModalOpen(false);
+                                setEditingCohortId(null);
+                                setConfirmDeleteCohortId(null);
+                            }}>
+                                <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+                                    <div className="bg-slate-900 text-white px-4 py-3 flex justify-between items-center">
+                                        <h3 className="font-bold flex items-center gap-2"><IconUsers /> 期生（学年）の追加・管理</h3>
+                                        <button onClick={() => {
+                                            setIsCohortModalOpen(false);
+                                            setEditingCohortId(null);
+                                            setConfirmDeleteCohortId(null);
+                                        }} className="text-slate-400 hover:text-white p-1 rounded-full transition-colors"><IconX /></button>
+                                    </div>
+                                    
+                                    <div className="p-5 overflow-y-auto max-h-[80vh] bg-slate-50 flex flex-col gap-4">
+                                        {/* 新規追加フォーム */}
+                                        <form onSubmit={handleAddCohort} className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+                                            <label className="block text-xs font-bold text-slate-700 mb-2">新しい期生を追加（何期生でも自由に入力できます）</label>
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={newCohortNameInput}
+                                                    onChange={e => setNewCohortNameInput(e.target.value)}
+                                                    placeholder="例: 28期生、30期生、2026年度入学生"
+                                                    className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500"
+                                                />
+                                                <button
+                                                    type="submit"
+                                                    disabled={!newCohortNameInput.trim()}
+                                                    className="bg-blue-500 hover:bg-blue-600 disabled:bg-slate-300 text-white font-bold px-4 py-2 rounded-lg transition-colors text-sm flex items-center gap-1"
+                                                >
+                                                    <IconPlus /> 追加
+                                                </button>
+                                            </div>
+                                        </form>
+
+                                        {/* 登録済み期生リスト */}
+                                        <div>
+                                            <div className="flex justify-between items-end mb-2">
+                                                <h4 className="text-xs font-bold text-slate-600">登録されている期生一覧</h4>
+                                                <span className="text-[10px] text-slate-400">クリックで表示期生を切り替え</span>
+                                            </div>
+                                            <ul className="flex flex-col gap-2">
+                                                {cohorts.map((cohort, index) => {
+                                                    const isSelected = selectedCohortId === cohort.id;
+                                                    const isEditing = editingCohortId === cohort.id;
+                                                    const isConfirmDelete = confirmDeleteCohortId === cohort.id;
+                                                    const cohortExamsCount = exams.filter(e => (e.cohortId || cohorts[0].id) === cohort.id).length;
+                                                    const pal = getCohortPalette(cohort, index);
+
+                                                    return (
+                                                        <li
+                                                            key={cohort.id}
+                                                            className={`relative bg-white rounded-lg border-2 overflow-hidden transition-all ${
+                                                                isSelected ? `border-blue-400 shadow-md ${pal.lightBg}` : 'border-slate-200 hover:border-slate-300 shadow-sm'
+                                                            } ${cohort.isHidden ? 'opacity-50 grayscale' : ''}`}
+                                                        >
+                                                            <div
+                                                                className="p-3 flex items-center justify-between cursor-pointer"
+                                                                onClick={() => {
+                                                                    if (!isEditing && !isConfirmDelete) {
+                                                                        setSelectedCohortId(cohort.id);
+                                                                        setSelectedStudentId(null);
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <div className="flex items-center gap-3 flex-1 overflow-hidden">
+                                                                    <div className="w-4 h-4 rounded-full shrink-0" style={{ backgroundColor: pal.color }}></div>
+                                                                    <div className="flex-1 min-w-0">
+                                                                        {isEditing ? (
+                                                                            <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                                                                                <input
+                                                                                    type="text"
+                                                                                    value={editingCohortName}
+                                                                                    onChange={e => setEditingCohortName(e.target.value)}
+                                                                                    className="border border-blue-400 rounded px-2 py-1 text-sm font-bold w-full"
+                                                                                    autoFocus
+                                                                                    onKeyDown={e => {
+                                                                                        if (e.key === 'Enter') handleSaveCohortName(cohort.id);
+                                                                                        if (e.key === 'Escape') setEditingCohortId(null);
+                                                                                    }}
+                                                                                />
+                                                                                <button onClick={() => handleSaveCohortName(cohort.id)} className="bg-blue-500 text-white text-xs px-2 py-1 rounded font-bold">保存</button>
+                                                                                <button onClick={() => setEditingCohortId(null)} className="bg-slate-200 text-slate-600 text-xs px-2 py-1 rounded font-bold">取消</button>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <div className="flex flex-col">
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <span className="font-extrabold text-slate-800 text-base truncate">{cohort.name}</span>
+                                                                                    {isSelected && <span className="bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0">選択中</span>}
+                                                                                    {cohort.isHidden && <span className="bg-slate-500 text-white text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0">非表示</span>}
+                                                                                </div>
+                                                                                <span className="text-xs text-slate-500 mt-0.5">登録試験数: {cohortExamsCount}件</span>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+
+                                                                {!isEditing && (
+                                                                    <div className="flex items-center gap-1 shrink-0 ml-2" onClick={e => e.stopPropagation()}>
+                                                                        <button
+                                                                            onClick={() => handleToggleHideCohort(cohort.id)}
+                                                                            className="p-1.5 text-slate-400 hover:text-slate-600 transition-colors bg-slate-100 hover:bg-slate-200 rounded mr-1"
+                                                                            title={cohort.isHidden ? "一覧に表示する" : "一覧から隠す"}
+                                                                        >
+                                                                            {cohort.isHidden ? <IconEyeOff /> : <IconEye />}
+                                                                        </button>
+                                                                        <div className="flex flex-col mr-2">
+                                                                            <button onClick={() => handleMoveCohort(index, 'up')} disabled={index === 0} className="text-slate-400 hover:text-blue-500 disabled:opacity-30 p-0.5"><IconChevronUp /></button>
+                                                                            <button onClick={() => handleMoveCohort(index, 'down')} disabled={index === cohorts.length - 1} className="text-slate-400 hover:text-blue-500 disabled:opacity-30 p-0.5"><IconChevronDown /></button>
+                                                                        </div>
+                                                                        <button onClick={() => {
+                                                                            setEditingCohortId(cohort.id);
+                                                                            setEditingCohortName(cohort.name);
+                                                                            setConfirmDeleteCohortId(null);
+                                                                        }} className="p-2 text-slate-400 hover:text-blue-600 transition-colors"><IconEdit /></button>
+                                                                        <button onClick={() => {
+                                                                            setConfirmDeleteCohortId(cohort.id);
+                                                                            setEditingCohortId(null);
+                                                                        }} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><IconTrash /></button>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            
+                                                            {isConfirmDelete && (
+                                                                <div className="bg-red-50 p-3 border-t border-red-100 flex flex-col gap-2">
+                                                                    <div className="text-xs font-bold text-red-700">
+                                                                        本当に「{cohort.name}」を削除しますか？<br/>
+                                                                        <span className="text-red-500 font-normal">※この期生に紐づく {cohortExamsCount}件 の試験データもすべて完全に削除されます。</span>
+                                                                    </div>
+                                                                    <div className="flex justify-end gap-2">
+                                                                        <button onClick={() => setConfirmDeleteCohortId(null)} className="px-3 py-1.5 text-xs font-bold text-slate-600 bg-white border border-slate-300 rounded hover:bg-slate-50">キャンセル</button>
+                                                                        <button onClick={() => handleDeleteCohort(cohort.id)} className="px-3 py-1.5 text-xs font-bold text-white bg-red-600 rounded hover:bg-red-700">はい、完全に削除します</button>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </li>
+                                                    );
+                                                })}
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="p-4 bg-white border-t border-slate-200 flex justify-end shrink-0">
+                                        <button
+                                            onClick={() => {
+                                                setIsCohortModalOpen(false);
+                                                setEditingCohortId(null);
+                                                setConfirmDeleteCohortId(null);
+                                            }}
+                                            className="px-6 py-2 bg-slate-800 text-white font-bold rounded-lg hover:bg-slate-700 transition-colors"
+                                        >
+                                            閉じる
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* --- RANKING MODAL --- */}
+                        {isRankingOpen && currentExamRankingSections.length > 0 && (
+                            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-40 p-2 sm:p-4" onClick={() => setIsRankingOpen(false)}>
+                                <div 
+                                    className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col overflow-hidden" 
+                                    onClick={e => e.stopPropagation()}
+                                >
+                                    {/* Modal Header */}
+                                    <div className="bg-slate-900 text-white px-4 py-3 sm:px-6 sm:py-4 flex flex-wrap justify-between items-center gap-3 shrink-0">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-amber-500 text-white rounded-lg flex items-center justify-center font-extrabold shadow-inner shrink-0">
+                                                <IconTrophy />
+                                            </div>
+                                            <div>
+                                                <h2 className="text-lg sm:text-xl font-bold leading-tight mt-0.5">
+                                                    {selectedExamName} ランキング表 (TOP 20)
+                                                </h2>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex flex-wrap items-center gap-2 sm:gap-4 ml-auto">
+                                            <div className="flex items-center bg-slate-800 rounded-lg p-1 border border-slate-700">
+                                                {['ALL', ...availableClasses].map(cls => (
+                                                    <button
+                                                        key={cls}
+                                                        type="button"
+                                                        onClick={() => setRankingClassFilter(cls)}
+                                                        className={`px-3 py-1 rounded text-xs font-bold transition-colors ${
+                                                            rankingClassFilter === cls ? 'bg-amber-500 text-white shadow' : 'text-slate-300 hover:text-white hover:bg-slate-700'
+                                                        }`}
+                                                    >
+                                                        {cls === 'ALL' ? '学年全体' : `${cls}組`}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            
+                                            <button 
+                                                type="button"
+                                                onClick={() => setIsRankingNameHidden(!isRankingNameHidden)}
+                                                className={`text-xs font-bold py-1.5 px-3 rounded flex items-center gap-1.5 shadow-sm transition-colors border ${
+                                                    isRankingNameHidden 
+                                                        ? 'bg-slate-700 text-amber-300 border-slate-600 hover:bg-slate-600' 
+                                                        : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-white'
+                                                }`}
+                                            >
+                                                {isRankingNameHidden ? <IconEyeOff /> : <IconEye />}
+                                                {isRankingNameHidden ? '氏名を非表示中' : '氏名を隠す'}
+                                            </button>
+
+                                            <button 
+                                                type="button"
+                                                onClick={triggerPrintRanking}
+                                                className="text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-1.5 px-3 rounded border border-emerald-500 flex items-center gap-1 shadow-sm transition-colors"
+                                            >
+                                                <IconPrinter /> 掲示・配布用に印刷 / PDF出力
+                                            </button>
+                                            <button 
+                                                type="button"
+                                                onClick={() => setIsRankingOpen(false)} 
+                                                className="text-slate-400 hover:text-white transition-colors bg-slate-800 p-2 rounded-full shrink-0"
+                                            >
+                                                <IconX />
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Modal Body */}
+                                    <div className="p-4 sm:p-6 overflow-y-auto bg-slate-50 flex-1">
+                                        {currentExamRankingSections.map(sec => (
+                                            <RankingSectionView 
+                                                key={sec.id} 
+                                                section={sec} 
+                                                isPrint={false} 
+                                                onSelectStudent={(id) => {
+                                                    setIsRankingOpen(false);
+                                                    setSelectedStudentId(id);
+                                                }}
+                                                hideNames={isRankingNameHidden}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* --- COHORT COMPARE MODAL --- */}
+                        {isCohortCompareOpen && (
+                            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-40 p-2 sm:p-4" onClick={() => setIsCohortCompareOpen(false)}>
+                                <div
+                                    className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden"
+                                    onClick={e => e.stopPropagation()}
+                                >
+                                    <div className="bg-slate-900 text-white px-4 py-3 sm:px-6 sm:py-4 flex flex-wrap justify-between items-center gap-3 shrink-0">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-indigo-600 text-white rounded-lg flex items-center justify-center font-extrabold shadow-inner shrink-0">
+                                                <IconChartBar />
+                                            </div>
+                                            <div>
+                                                <h2 className="text-lg sm:text-xl font-bold leading-tight mt-0.5">
+                                                    過年度比較（世代間比較）
+                                                </h2>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-2 ml-auto">
+                                            <button
+                                                type="button"
+                                                onClick={triggerPrintCohortCompare}
+                                                className="text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-1.5 px-3 rounded border border-emerald-500 flex items-center gap-1 shadow-sm transition-colors"
+                                            >
+                                                <IconPrinter /> 比較シートを印刷 / PDF出力
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsCohortCompareOpen(false)}
+                                                className="text-slate-400 hover:text-white transition-colors bg-slate-800 p-2 rounded-full shrink-0"
+                                            >
+                                                <IconX />
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-4 sm:p-6 overflow-y-auto bg-slate-50 flex-1">
+                                        <CrossCohortComparisonView
+                                            cohorts={visibleCohorts}
+                                            exams={exams}
+                                            records={records}
+                                            compareConfig={compareConfig}
+                                            setCompareConfig={setCompareConfig}
+                                            isPrint={false}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* --- CLASS COMPARE MODAL --- */}
+                        {isClassCompareOpen && (
+                            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-40 p-2 sm:p-4" onClick={() => setIsClassCompareOpen(false)}>
+                                <div
+                                    className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden"
+                                    onClick={e => e.stopPropagation()}
+                                >
+                                    <div className="bg-slate-900 text-white px-4 py-3 sm:px-6 sm:py-4 flex flex-wrap justify-between items-center gap-3 shrink-0">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-rose-600 text-white rounded-lg flex items-center justify-center font-extrabold shadow-inner shrink-0">
+                                                <IconUsers />
+                                            </div>
+                                            <div>
+                                                <h2 className="text-lg sm:text-xl font-bold leading-tight mt-0.5">
+                                                    クラス間比較（A組 vs B組）
+                                                </h2>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-2 ml-auto">
+                                            <button
+                                                type="button"
+                                                onClick={triggerPrintClassCompare}
+                                                className="text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-1.5 px-3 rounded border border-emerald-500 flex items-center gap-1 shadow-sm transition-colors"
+                                            >
+                                                <IconPrinter /> 比較シートを印刷 / PDF出力
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsClassCompareOpen(false)}
+                                                className="text-slate-400 hover:text-white transition-colors bg-slate-800 p-2 rounded-full shrink-0"
+                                            >
+                                                <IconX />
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-4 sm:p-6 overflow-y-auto bg-slate-50 flex-1">
+                                        <ClassComparisonView
+                                            cohorts={visibleCohorts}
+                                            currentCohort={currentCohort}
+                                            onSelectCohort={(id) => {
+                                                setSelectedCohortId(id);
+                                                setSelectedStudentId(null);
+                                            }}
+                                            cohortExams={exams.filter(e => (e.cohortId || cohorts[0].id) === currentCohort.id)}
+                                            records={records}
+                                            classCompareConfig={classCompareConfig}
+                                            setClassCompareConfig={setClassCompareConfig}
+                                            isPrint={false}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* --- STUDENT DASHBOARD MODAL (v5.5: 生徒向けダッシュボード) --- */}
                         {isStudentDashboardOpen && (
                             <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-40 p-2 sm:p-4" onClick={() => setIsStudentDashboardOpen(false)}>
