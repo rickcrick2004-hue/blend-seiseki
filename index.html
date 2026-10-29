@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BLEND 成績推移トラッカー v5.8</title>
+    <title>BLEND 成績推移トラッカー v5.9</title>
     <!-- React & Babelのバージョンを安定版に固定 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
@@ -3950,23 +3950,50 @@
                                 );
                             }
 
+                            // 必要な教科がすべて揃っているか判定する関数
+                            const hasAllRequiredScores = (record, subject) => {
+                                if (!record || !record.scores) return false;
+                                let requiredSubjects = [subject];
+                                
+                                if (subject.includes('5教科')) {
+                                    requiredSubjects = ['国語', '社会', '数学', '理科', '英語'];
+                                } else if (subject.includes('9教科')) {
+                                    requiredSubjects = ['国語', '社会', '数学', '理科', '英語', '音楽', '美術', '保体', '技家'];
+                                } else if (subject.includes('3教科')) {
+                                    if (subject.includes('点数') || subject.includes('偏差値')) {
+                                        requiredSubjects = [subject.replace('3教科', '国語'), subject.replace('3教科', '数学'), subject.replace('3教科', '英語')];
+                                    } else {
+                                        requiredSubjects = ['国語', '数学', '英語'];
+                                    }
+                                }
+                                
+                                return requiredSubjects.every(sub => {
+                                    const val = record.scores[sub];
+                                    return val !== undefined && val !== null && val !== '';
+                                });
+                            };
+
                             const growthRecords = [];
                             const prevRecs = records.filter(r => r.examId === previousExam.id);
                             
                             examRecords.forEach(curr => {
                                 const prev = prevRecs.find(p => p.studentId === curr.studentId);
                                 if (prev) {
-                                    const currVal = getStudentSubjectScore(curr, growthSubject);
-                                    const prevVal = getStudentSubjectScore(prev, growthSubject);
-                                    if (currVal !== null && prevVal !== null && !isNaN(currVal) && !isNaN(prevVal)) {
-                                        const diff = currVal - prevVal;
-                                        if (diff > 0) { // 上がった生徒のみを対象
-                                            growthRecords.push({
-                                                class: curr.class,
-                                                diff,
-                                                currVal,
-                                                prevVal
-                                            });
+                                    // 片方でも欠席等でデータが欠けている場合は除外
+                                    if (hasAllRequiredScores(curr, growthSubject) && hasAllRequiredScores(prev, growthSubject)) {
+                                        const currVal = getStudentSubjectScore(curr, growthSubject);
+                                        const prevVal = getStudentSubjectScore(prev, growthSubject);
+                                        if (currVal !== null && prevVal !== null && !isNaN(currVal) && !isNaN(prevVal)) {
+                                            // 浮動小数点誤差を解消（小数点第1位まで丸める）
+                                            const diff = Math.round((currVal - prevVal) * 10) / 10;
+                                            if (diff > 0) { // 上がった生徒のみを対象
+                                                growthRecords.push({
+                                                    class: curr.class,
+                                                    diff,
+                                                    currVal: Math.round(currVal * 10) / 10,
+                                                    prevVal: Math.round(prevVal * 10) / 10
+                                                });
+                                            }
                                         }
                                     }
                                 }
@@ -3975,7 +4002,8 @@
                             // 差分の降順でソート
                             growthRecords.sort((a, b) => b.diff - a.diff);
                             const topGrowth = growthRecords.slice(0, 10);
-                            const isDev = growthSubject.includes('偏差値');
+                            
+                            const formatVal = (val) => Number.isInteger(val) ? val : val.toFixed(1);
 
                             return (
                                 <div className="flex flex-col h-full items-center pb-8 pt-4">
@@ -4021,11 +4049,11 @@
                                                             </div>
                                                             <div className="text-right flex items-center gap-3">
                                                                 <div className="hidden sm:block text-xs font-mono font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded">
-                                                                    <span className="line-through decoration-slate-400 opacity-60 mr-1">{isDev ? item.prevVal.toFixed(1) : item.prevVal}</span> 
-                                                                    <span className="text-slate-600">→ {isDev ? item.currVal.toFixed(1) : item.currVal}</span>
+                                                                    <span className="line-through decoration-slate-400 opacity-60 mr-1">{formatVal(item.prevVal)}</span> 
+                                                                    <span className="text-slate-600">→ {formatVal(item.currVal)}</span>
                                                                 </div>
                                                                 <div className="text-xl sm:text-2xl font-extrabold text-emerald-600 bg-emerald-50 px-3 sm:px-4 py-1 rounded-lg border border-emerald-200 shadow-[0_2px_5px_rgba(16,185,129,0.15)] font-mono">
-                                                                    +{isDev ? item.diff.toFixed(1) : item.diff}
+                                                                    +{formatVal(item.diff)}
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -5685,7 +5713,7 @@
                                 <div className="bg-blue-600 p-2 rounded-lg shrink-0">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                                 </div>
-                                <h1 className="text-xl font-bold tracking-wider hidden lg:block whitespace-nowrap">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-1">v5.8</span></h1>
+                                <h1 className="text-xl font-bold tracking-wider hidden lg:block whitespace-nowrap">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-1">v5.9</span></h1>
 
                                 {/* 期生（学年）クイック切替＆管理バー（3年周期カラー対応・非表示期生は除外） */}
                                 <div className="flex items-center bg-slate-800 rounded-lg p-1 border border-slate-700 gap-1 ml-1">
