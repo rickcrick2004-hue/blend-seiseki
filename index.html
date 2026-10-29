@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BLEND 成績推移トラッカー v5.4</title>
+    <title>BLEND 成績推移トラッカー v5.5</title>
     <!-- React & Babelのバージョンを安定版に固定 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
@@ -736,6 +736,8 @@
         const IconPlus = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
         const IconEye = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>;
         const IconEyeOff = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>;
+        const IconDashboard = () => <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>;
+        const IconScatter = () => <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="7" cy="17" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="17" cy="7" r="2"></circle><line x1="3" y1="21" x2="21" y2="21"></line><line x1="3" y1="21" x2="3" y2="3"></line></svg>;
 
         // 期生（コホート）別の3年周期カラーパレット定義（28期生=緑、29期生=赤、30期生=青）
         const COHORT_CYCLE_PALETTES = {
@@ -3355,6 +3357,380 @@
             );
         };
 
+        // --- 生徒向けダッシュボード（学年全体のヒストグラム ＆ 相関散布図） ---
+        const StudentDashboardView = ({
+            cohort,
+            cohortExams,
+            records,
+            dashboardConfig,
+            setDashboardConfig
+        }) => {
+            const { mode = 'histogram', examId = '', histSubject = '5教科総点', scatterXSubject = '数学', scatterYSubject = '英語' } = dashboardConfig;
+
+            const activeExam = useMemo(() => {
+                if (cohortExams.length === 0) return null;
+                return cohortExams.find(e => e.id === examId) || cohortExams[cohortExams.length - 1];
+            }, [cohortExams, examId]);
+
+            const examRecords = useMemo(() => {
+                if (!activeExam) return [];
+                return records.filter(r => r.examId === activeExam.id);
+            }, [records, activeExam]);
+
+            const examType = activeExam ? (activeExam.type || 'regular') : 'regular';
+
+            const compareSubjects = useMemo(() => {
+                const isRank = (s) => s.includes('席次') || s.includes('順位');
+                const subSet = new Set();
+                examRecords.forEach(r => {
+                    if (r.scores) {
+                        Object.keys(r.scores).forEach(s => {
+                            if (!isRank(s)) subSet.add(s);
+                        });
+                    }
+                });
+                if (examType === 'benesse') {
+                    ['国語点数', '国語偏差値', '数学点数', '数学偏差値', '英語点数', '英語偏差値', '3教科点数', '3教科偏差値'].forEach(s => subSet.add(s));
+                } else if (examType === 'comprehensive') {
+                    ['国語', '社会', '数学', '理科', '英語', '5教科総点', '5教科平均点', '音楽', '美術', '保体', '技家', '9教科総点', '9教科平均点'].forEach(s => subSet.add(s));
+                } else {
+                    ['国語', '社会', '数学', '理科', '英語', '5教科総点', '5教科平均点'].forEach(s => subSet.add(s));
+                }
+                const arr = Array.from(subSet);
+                arr.sort((a, b) => {
+                    const idxA = SUBJECT_ORDER.indexOf(a);
+                    const idxB = SUBJECT_ORDER.indexOf(b);
+                    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                    if (idxA !== -1) return -1;
+                    if (idxB !== -1) return 1;
+                    return a.localeCompare(b);
+                });
+                return arr;
+            }, [examRecords, examType]);
+
+            useEffect(() => {
+                let nextHist = histSubject;
+                let nextX = scatterXSubject;
+                let nextY = scatterYSubject;
+                const defHist = examType === 'benesse' ? '3教科偏差値' : '5教科総点';
+                const defX = examType === 'benesse' ? '数学偏差値' : '数学';
+                const defY = examType === 'benesse' ? '英語偏差値' : '英語';
+
+                if (compareSubjects.length > 0 && !compareSubjects.includes(histSubject)) nextHist = compareSubjects.includes(defHist) ? defHist : compareSubjects[0];
+                if (compareSubjects.length > 0 && !compareSubjects.includes(scatterXSubject)) nextX = compareSubjects.includes(defX) ? defX : compareSubjects[0];
+                if (compareSubjects.length > 0 && !compareSubjects.includes(scatterYSubject)) nextY = compareSubjects.includes(defY) ? defY : (compareSubjects[1] || compareSubjects[0]);
+
+                if (nextHist !== histSubject || nextX !== scatterXSubject || nextY !== scatterYSubject || (examId !== activeExam?.id)) {
+                    setDashboardConfig(prev => ({
+                        ...prev,
+                        histSubject: nextHist,
+                        scatterXSubject: nextX,
+                        scatterYSubject: nextY,
+                        examId: activeExam ? activeExam.id : ''
+                    }));
+                }
+            }, [compareSubjects, histSubject, scatterXSubject, scatterYSubject, examType, activeExam, examId]);
+
+            const getSubjectRangeAndBands = (subject) => {
+                let min = 0, max = 100, step = 10, bandStep = 10;
+                if (subject.includes('偏差値') || examType === 'benesse') {
+                    min = 20; max = 80; step = 10; bandStep = 5;
+                } else if (subject === '5教科総点') {
+                    min = 0; max = 500; step = 50; bandStep = 50;
+                } else if (subject === '9教科総点') {
+                    min = 0; max = 900; step = 100; bandStep = 100;
+                } else if (subject === '3教科点数') {
+                    min = 0; max = 300; step = 50; bandStep = 30;
+                }
+                const bands = [];
+                for (let i = min; i < max; i += bandStep) {
+                    bands.push({ min: i, max: i + bandStep, label: `${i}〜${i + bandStep - 1}`, count: 0 });
+                }
+                if (bands.length > 0) {
+                    bands[bands.length - 1].max = max + 1;
+                    bands[bands.length - 1].label = `${bands[bands.length - 1].min}〜${max}`;
+                }
+                return { min, max, step, bands };
+            };
+
+            return (
+                <div className="space-y-4">
+                    {/* 操作パネル */}
+                    <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded">対象試験: {activeExam ? activeExam.name : '-'}</span>
+                            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 ml-auto">
+                                <button
+                                    onClick={() => setDashboardConfig(prev => ({ ...prev, mode: 'histogram' }))}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${mode === 'histogram' ? 'bg-cyan-600 text-white shadow' : 'text-slate-600 hover:bg-white/60'}`}
+                                >
+                                    <IconBarChart2 /> 成績分布（ヒストグラム）
+                                </button>
+                                <button
+                                    onClick={() => setDashboardConfig(prev => ({ ...prev, mode: 'scatter' }))}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${mode === 'scatter' ? 'bg-cyan-600 text-white shadow' : 'text-slate-600 hover:bg-white/60'}`}
+                                >
+                                    <IconScatter /> 相関図（散布図）
+                                </button>
+                            </div>
+                        </div>
+
+                        {mode === 'histogram' && (
+                            <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100">
+                                <span className="text-xs font-bold text-slate-500 mr-1">分布を見る科目:</span>
+                                {compareSubjects.map(sub => (
+                                    <button
+                                        key={sub}
+                                        onClick={() => setDashboardConfig(prev => ({ ...prev, histSubject: sub }))}
+                                        className={`px-3 py-1 rounded-full text-xs font-bold border transition-all ${histSubject === sub ? 'bg-slate-800 text-white border-slate-800 shadow-sm' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}
+                                    >
+                                        {sub}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
+                        {mode === 'scatter' && (
+                            <div className="flex flex-col gap-2 pt-2 border-t border-slate-100">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className="text-xs font-bold text-slate-500 mr-1">X軸（横）の科目:</span>
+                                    {compareSubjects.map(sub => (
+                                        <button
+                                            key={sub}
+                                            onClick={() => setDashboardConfig(prev => ({ ...prev, scatterXSubject: sub }))}
+                                            className={`px-2.5 py-1 rounded-full text-xs font-bold border transition-all ${scatterXSubject === sub ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}
+                                        >
+                                            {sub}
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className="text-xs font-bold text-slate-500 mr-1">Y軸（縦）の科目:</span>
+                                    {compareSubjects.map(sub => (
+                                        <button
+                                            key={sub}
+                                            onClick={() => setDashboardConfig(prev => ({ ...prev, scatterYSubject: sub }))}
+                                            className={`px-2.5 py-1 rounded-full text-xs font-bold border transition-all ${scatterYSubject === sub ? 'bg-pink-600 text-white border-pink-600 shadow-sm' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}
+                                        >
+                                            {sub}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* グラフ描画エリア */}
+                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-6 min-h-[450px]">
+                        {mode === 'histogram' && (() => {
+                            const { bands } = getSubjectRangeAndBands(histSubject);
+                            let validCount = 0;
+                            let sum = 0;
+                            let maxScore = -999;
+
+                            examRecords.forEach(r => {
+                                const val = getStudentSubjectScore(r, histSubject);
+                                if (val !== null && !isNaN(val)) {
+                                    validCount++;
+                                    sum += val;
+                                    if (val > maxScore) maxScore = val;
+                                    for (let b of bands) {
+                                        if (val >= b.min && val < b.max) {
+                                            b.count++;
+                                            break;
+                                        }
+                                    }
+                                }
+                            });
+
+                            const maxCount = Math.max(1, ...bands.map(b => b.count));
+                            const yStep = maxCount <= 10 ? 2 : (maxCount <= 25 ? 5 : (maxCount <= 50 ? 10 : 20));
+                            const maxY = Math.ceil(maxCount / yStep) * yStep;
+                            const yTicks = [];
+                            for (let i = 0; i <= maxY; i += yStep) yTicks.push(i);
+
+                            const svgW = 800;
+                            const svgH = 380;
+                            const padL = 50;
+                            const padR = 20;
+                            const padT = 20;
+                            const padB = 40;
+                            const plotW = svgW - padL - padR;
+                            const plotH = svgH - padT - padB;
+                            const bandW = plotW / bands.length;
+
+                            return (
+                                <div className="flex flex-col h-full">
+                                    <div className="flex justify-between items-end mb-4">
+                                        <h3 className="text-lg font-extrabold text-slate-800">学年全体の成績分布（{histSubject}）</h3>
+                                        <div className="flex gap-4">
+                                            <div className="text-center">
+                                                <div className="text-[10px] text-slate-500 font-bold">受験者数</div>
+                                                <div className="font-extrabold text-lg text-slate-700">{validCount}人</div>
+                                            </div>
+                                            <div className="text-center">
+                                                <div className="text-[10px] text-slate-500 font-bold">学年平均</div>
+                                                <div className="font-extrabold text-lg text-blue-600">{validCount > 0 ? (sum / validCount).toFixed(1) : '-'}</div>
+                                            </div>
+                                            <div className="text-center">
+                                                <div className="text-[10px] text-slate-500 font-bold">学年最高</div>
+                                                <div className="font-extrabold text-lg text-red-600">{validCount > 0 ? (histSubject.includes('偏差値') ? maxScore.toFixed(1) : Math.round(maxScore)) : '-'}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex-1 overflow-x-auto">
+                                        <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full h-auto min-w-[600px] select-none">
+                                            {yTicks.map(t => {
+                                                const y = padT + plotH - (t / maxY) * plotH;
+                                                return (
+                                                    <g key={t}>
+                                                        <line x1={padL} y1={y} x2={svgW - padR} y2={y} stroke="#e2e8f0" strokeWidth="1" />
+                                                        <text x={padL - 10} y={y + 4} textAnchor="end" fontSize="12" fill="#64748b">{t}人</text>
+                                                    </g>
+                                                );
+                                            })}
+                                            {bands.map((b, i) => {
+                                                const x = padL + i * bandW;
+                                                const barW = bandW * 0.8;
+                                                const barX = x + (bandW - barW) / 2;
+                                                const h = (b.count / maxY) * plotH;
+                                                const y = padT + plotH - h;
+                                                return (
+                                                    <g key={i}>
+                                                        <rect x={barX} y={y} width={barW} height={h} rx="4" fill="#0ea5e9" opacity="0.85">
+                                                            <title>{b.label} : {b.count}人</title>
+                                                        </rect>
+                                                        {b.count > 0 && (
+                                                            <text x={x + bandW / 2} y={y - 6} textAnchor="middle" fontSize="13" fontWeight="bold" fill="#0284c7">
+                                                                {b.count}
+                                                            </text>
+                                                        )}
+                                                        <text x={x + bandW / 2} y={svgH - padB + 20} textAnchor="middle" fontSize="11" fontWeight="bold" fill="#475569">
+                                                            {b.label}
+                                                        </text>
+                                                    </g>
+                                                );
+                                            })}
+                                        </svg>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
+                        {mode === 'scatter' && (() => {
+                            const rangeX = getSubjectRangeAndBands(scatterXSubject);
+                            const rangeY = getSubjectRangeAndBands(scatterYSubject);
+
+                            const points = [];
+                            let sumX = 0, sumY = 0, count = 0;
+                            examRecords.forEach(r => {
+                                const vx = getStudentSubjectScore(r, scatterXSubject);
+                                const vy = getStudentSubjectScore(r, scatterYSubject);
+                                if (vx !== null && !isNaN(vx) && vy !== null && !isNaN(vy)) {
+                                    points.push({ x: vx, y: vy });
+                                    sumX += vx;
+                                    sumY += vy;
+                                    count++;
+                                }
+                            });
+
+                            const avgX = count > 0 ? sumX / count : 0;
+                            const avgY = count > 0 ? sumY / count : 0;
+
+                            // 相関係数(r)
+                            let num = 0, denX = 0, denY = 0;
+                            points.forEach(p => {
+                                const dx = p.x - avgX;
+                                const dy = p.y - avgY;
+                                num += dx * dy;
+                                denX += dx * dx;
+                                denY += dy * dy;
+                            });
+                            const rVal = (denX > 0 && denY > 0) ? num / Math.sqrt(denX * denY) : 0;
+
+                            const svgW = 600;
+                            const svgH = 600;
+                            const padL = 60;
+                            const padR = 30;
+                            const padT = 30;
+                            const padB = 60;
+                            const plotW = svgW - padL - padR;
+                            const plotH = svgH - padT - padB;
+
+                            const getX = (val) => padL + ((val - rangeX.min) / (rangeX.max - rangeX.min)) * plotW;
+                            const getY = (val) => padT + plotH - ((val - rangeY.min) / (rangeY.max - rangeY.min)) * plotH;
+
+                            const xTicks = [];
+                            for (let i = rangeX.min; i <= rangeX.max; i += rangeX.step) xTicks.push(i);
+                            const yTicks = [];
+                            for (let i = rangeY.min; i <= rangeY.max; i += rangeY.step) yTicks.push(i);
+
+                            return (
+                                <div className="flex flex-col h-full items-center">
+                                    <div className="w-full flex justify-between items-end mb-2 max-w-2xl">
+                                        <h3 className="text-lg font-extrabold text-slate-800">2科目の相関図（{scatterXSubject} × {scatterYSubject}）</h3>
+                                        <div className="flex gap-4">
+                                            <div className="text-center">
+                                                <div className="text-[10px] text-slate-500 font-bold">プロット数</div>
+                                                <div className="font-extrabold text-lg text-slate-700">{count}人</div>
+                                            </div>
+                                            <div className="text-center">
+                                                <div className="text-[10px] text-slate-500 font-bold">相関係数 (r)</div>
+                                                <div className={`font-extrabold text-lg ${rVal > 0.6 ? 'text-rose-600' : (rVal < -0.6 ? 'text-blue-600' : 'text-slate-700')}`}>
+                                                    {count > 1 ? rVal.toFixed(2) : '-'}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="w-full max-w-2xl bg-white border border-slate-200 rounded-lg p-2 shadow-inner">
+                                        <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full h-auto">
+                                            {/* 背景グリッド */}
+                                            {xTicks.map(t => (
+                                                <g key={`x${t}`}>
+                                                    <line x1={getX(t)} y1={padT} x2={getX(t)} y2={svgH - padB} stroke="#f1f5f9" strokeWidth="1" />
+                                                    <text x={getX(t)} y={svgH - padB + 20} textAnchor="middle" fontSize="11" fill="#94a3b8">{t}</text>
+                                                </g>
+                                            ))}
+                                            {yTicks.map(t => (
+                                                <g key={`y${t}`}>
+                                                    <line x1={padL} y1={getY(t)} x2={svgW - padR} y2={getY(t)} stroke="#f1f5f9" strokeWidth="1" />
+                                                    <text x={padL - 10} y={getY(t) + 4} textAnchor="end" fontSize="11" fill="#94a3b8">{t}</text>
+                                                </g>
+                                            ))}
+                                            
+                                            {/* 平均線のクロス */}
+                                            {count > 0 && (
+                                                <>
+                                                    <line x1={getX(avgX)} y1={padT} x2={getX(avgX)} y2={svgH - padB} stroke="#ef4444" strokeWidth="1.5" strokeDasharray="4 4" opacity="0.6" />
+                                                    <line x1={padL} y1={getY(avgY)} x2={svgW - padR} y2={getY(avgY)} stroke="#ef4444" strokeWidth="1.5" strokeDasharray="4 4" opacity="0.6" />
+                                                    <text x={getX(avgX) + 5} y={padT + 10} fontSize="10" fill="#ef4444" fontWeight="bold">X平均: {avgX.toFixed(1)}</text>
+                                                    <text x={svgW - padR - 5} y={getY(avgY) - 5} textAnchor="end" fontSize="10" fill="#ef4444" fontWeight="bold">Y平均: {avgY.toFixed(1)}</text>
+                                                </>
+                                            )}
+
+                                            {/* 軸ラベル */}
+                                            <text x={svgW / 2} y={svgH - 10} textAnchor="middle" fontSize="14" fontWeight="bold" fill="#3b82f6">【X軸】 {scatterXSubject}</text>
+                                            <text x={15} y={svgH / 2} textAnchor="middle" transform={`rotate(-90 15 ${svgH / 2})`} fontSize="14" fontWeight="bold" fill="#db2777">【Y軸】 {scatterYSubject}</text>
+
+                                            {/* ドット（生徒） */}
+                                            {points.map((p, idx) => (
+                                                <circle key={idx} cx={getX(p.x)} cy={getY(p.y)} r="5.5" fill="#6366f1" opacity="0.65" stroke="#ffffff" strokeWidth="1">
+                                                    <title>{scatterXSubject}: {p.x} / {scatterYSubject}: {p.y}</title>
+                                                </circle>
+                                            ))}
+                                        </svg>
+                                    </div>
+                                    <div className="mt-3 text-xs text-slate-500 bg-slate-100 px-3 py-1.5 rounded-md">
+                                        ※ ドットにカーソルを合わせると点数が表示されます（個人名は表示されません）
+                                    </div>
+                                </div>
+                            );
+                        })()}
+                    </div>
+                </div>
+            );
+        };
+
         // --- ランキング表セクション表示コンポーネント（画面＆印刷共用） ---
         const RankingSectionView = ({ section, isPrint = false, onSelectStudent = null, hideNames = false }) => {
             if (!section || !section.columns || section.columns.length === 0) return null;
@@ -3666,6 +4042,16 @@
                 mode: 'all', // 'all', 'class', 'individual'
                 targetClass: '',
                 selectedStudents: []
+            });
+
+            // Student Dashboard State (v5.5)
+            const [isStudentDashboardOpen, setIsStudentDashboardOpen] = useState(false);
+            const [dashboardConfig, setDashboardConfig] = useState({
+                mode: 'histogram',
+                examId: '',
+                histSubject: '5教科総点',
+                scatterXSubject: '数学',
+                scatterYSubject: '英語'
             });
 
             // Settings & Sync State
@@ -4980,7 +5366,7 @@
                                 <div className="bg-blue-600 p-2 rounded-lg shrink-0">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                                 </div>
-                                <h1 className="text-xl font-bold tracking-wider hidden lg:block whitespace-nowrap">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-1">v5.4</span></h1>
+                                <h1 className="text-xl font-bold tracking-wider hidden lg:block whitespace-nowrap">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-1">v5.5</span></h1>
 
                                 {/* 期生（学年）クイック切替＆管理バー（3年周期カラー対応・非表示期生は除外） */}
                                 <div className="flex items-center bg-slate-800 rounded-lg p-1 border border-slate-700 gap-1 ml-1">
@@ -5227,6 +5613,16 @@
                                                     className="text-xs bg-amber-50 hover:bg-amber-100 text-amber-800 font-extrabold py-1.5 px-3 rounded border border-amber-300 flex items-center gap-1.5 shadow-sm transition-colors"
                                                 >
                                                     <IconTrophy /> ランキング表
+                                                </button>
+                                                <button 
+                                                    onClick={() => {
+                                                        setDashboardConfig(prev => ({ ...prev, examId: selectedExamId || '' }));
+                                                        setIsStudentDashboardOpen(true);
+                                                    }}
+                                                    className="text-xs bg-cyan-50 hover:bg-cyan-100 text-cyan-800 font-extrabold py-1.5 px-3 rounded border border-cyan-300 flex items-center gap-1.5 shadow-sm transition-colors"
+                                                    title="生徒にそのまま見せられる氏名非公開の分析ダッシュボードを開きます"
+                                                >
+                                                    <IconDashboard /> 生徒向けダッシュボード
                                                 </button>
                                                 <label className="cursor-pointer text-xs bg-white hover:bg-slate-50 text-slate-600 font-medium py-1.5 px-2 rounded border border-slate-300 flex items-center gap-1 shadow-sm transition-colors">
                                                     <IconUpload /> 試験をCSVで上書き
@@ -5628,254 +6024,29 @@
                             </div>
                         )}
 
-                        {/* --- COHORT MANAGEMENT MODAL (v5.4: 期生の追加・表示/非表示・名前変更・並び替え) --- */}
-                        {isCohortModalOpen && (
-                            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setIsCohortModalOpen(false)}>
-                                <div className="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-                                    <div className="bg-slate-900 text-white px-4 py-3.5 flex justify-between items-center">
-                                        <h3 className="font-bold flex items-center gap-2 text-sm">
-                                            <IconUsers /> 期生（学年）の追加・管理
-                                        </h3>
-                                        <button onClick={() => setIsCohortModalOpen(false)} className="text-slate-400 hover:text-white p-1 rounded-full transition-colors">
-                                            <IconX />
-                                        </button>
-                                    </div>
-
-                                    <div className="p-4 sm:p-5 overflow-y-auto max-h-[80vh] bg-slate-50 flex flex-col gap-4">
-                                        {/* 新規期生の追加フォーム */}
-                                        <form onSubmit={handleAddCohort} className="bg-white p-3.5 rounded-lg border border-slate-200 shadow-sm">
-                                            <label className="block text-xs font-bold text-slate-700 mb-2">
-                                                新しい期生を追加（何期生でも自由に入力できます）
-                                            </label>
-                                            <div className="flex gap-2">
-                                                <input
-                                                    type="text"
-                                                    placeholder="例: 28期生、30期生、2026年度入学生"
-                                                    value={newCohortNameInput}
-                                                    onChange={e => setNewCohortNameInput(e.target.value)}
-                                                    className="flex-1 text-sm border border-slate-300 rounded-lg px-3 py-1.5 outline-none focus:border-blue-500 font-medium"
-                                                />
-                                                <button
-                                                    type="submit"
-                                                    disabled={!newCohortNameInput.trim()}
-                                                    className="bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-xs font-bold px-4 py-1.5 rounded-lg flex items-center gap-1 transition-colors shrink-0"
-                                                >
-                                                    <IconPlus /> 追加
-                                                </button>
-                                            </div>
-                                        </form>
-
-                                        {/* 登録済み期生の一覧・表示/非表示切替・名称変更・順序入替 */}
-                                        <div className="space-y-2">
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-xs font-bold text-slate-600">登録されている期生一覧</span>
-                                                <span className="text-[11px] text-slate-400">「表示中 / 非表示」でグラフやタブの表示を切替</span>
-                                            </div>
-                                            <div className="space-y-2">
-                                                {cohorts.map((c, idx) => {
-                                                    const isSelected = c.id === currentCohort.id && !c.isHidden;
-                                                    const isHidden = !!c.isHidden;
-                                                    const isLastVisible = !isHidden && visibleCohorts.length <= 1;
-                                                    const palette = getCohortPalette(c, idx);
-                                                    const defaultId = cohorts[0].id;
-                                                    const cExamCount = exams.filter(e => (e.cohortId || defaultId) === c.id).length;
-
-                                                    return (
-                                                        <div
-                                                            key={c.id}
-                                                            className={`p-3 rounded-lg border transition-all ${
-                                                                isHidden
-                                                                    ? 'bg-slate-100/80 border-slate-200 opacity-65'
-                                                                    : isSelected
-                                                                        ? 'bg-white border-blue-500 ring-2 ring-blue-500/20'
-                                                                        : 'bg-white border-slate-200'
-                                                            }`}
-                                                        >
-                                                            {editingCohortId === c.id ? (
-                                                                <div className="flex items-center gap-2">
-                                                                    <input
-                                                                        type="text"
-                                                                        value={editingCohortName}
-                                                                        onChange={e => setEditingCohortName(e.target.value)}
-                                                                        className="flex-1 text-sm font-bold border border-blue-400 rounded px-2.5 py-1 outline-none bg-white"
-                                                                        autoFocus
-                                                                    />
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => handleSaveCohortName(c.id)}
-                                                                        className="bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded hover:bg-blue-700"
-                                                                    >
-                                                                        保存
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => setEditingCohortId(null)}
-                                                                        className="bg-slate-200 text-slate-600 text-xs font-bold px-2.5 py-1 rounded hover:bg-slate-300"
-                                                                    >
-                                                                        戻す
-                                                                    </button>
-                                                                </div>
-                                                            ) : (
-                                                                <div className="flex items-center justify-between gap-2">
-                                                                    <div
-                                                                        onClick={() => {
-                                                                            if (isHidden) {
-                                                                                handleToggleHideCohort(c.id);
-                                                                            }
-                                                                            setSelectedCohortId(c.id);
-                                                                            setSelectedStudentId(null);
-                                                                        }}
-                                                                        className="flex items-center gap-2.5 flex-1 cursor-pointer"
-                                                                        title={isHidden ? 'クリックすると表示に戻して選択します' : 'クリックしてこの期生を表示'}
-                                                                    >
-                                                                        <span
-                                                                            className="w-3.5 h-3.5 rounded-full shrink-0"
-                                                                            style={{ backgroundColor: isHidden ? '#94a3b8' : palette.color }}
-                                                                        ></span>
-                                                                        <div>
-                                                                            <div className="flex items-center gap-2">
-                                                                                <span className={`font-extrabold text-sm ${isHidden ? 'text-slate-500 line-through' : 'text-slate-800'}`}>
-                                                                                    {c.name}
-                                                                                </span>
-                                                                                {isSelected && (
-                                                                                    <span className="text-[10px] bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded-full">
-                                                                                        選択中
-                                                                                    </span>
-                                                                                )}
-                                                                                {isHidden && (
-                                                                                    <span className="text-[10px] bg-slate-200 text-slate-600 font-bold px-2 py-0.5 rounded-full">
-                                                                                        非表示中
-                                                                                    </span>
-                                                                                )}
-                                                                            </div>
-                                                                            <span className="text-[11px] text-slate-400">登録試験数: {cExamCount}件</span>
-                                                                        </div>
-                                                                    </div>
-
-                                                                    <div className="flex items-center gap-1">
-                                                                        {/* 表示 / 非表示 切り替えボタン */}
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => handleToggleHideCohort(c.id)}
-                                                                            disabled={isLastVisible}
-                                                                            className={`px-2 py-1 rounded text-[11px] font-bold border flex items-center gap-1 transition-colors mr-1 ${
-                                                                                isHidden
-                                                                                    ? 'bg-white text-slate-500 border-slate-300 hover:bg-slate-50 hover:text-slate-700'
-                                                                                    : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                                                                            } ${isLastVisible ? 'opacity-40 cursor-not-allowed' : ''}`}
-                                                                            title={isLastVisible ? 'すべての期生を非表示にすることはできません' : (isHidden ? 'クリックして再表示する' : 'データを残したままグラフやタブから非表示にする')}
-                                                                        >
-                                                                            {isHidden ? <IconEyeOff /> : <IconEye />}
-                                                                            <span>{isHidden ? '非表示' : '表示中'}</span>
-                                                                        </button>
-
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => handleMoveCohort(idx, 'up')}
-                                                                            disabled={idx === 0}
-                                                                            className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-25"
-                                                                            title="上へ移動"
-                                                                        >
-                                                                            <IconChevronUp />
-                                                                        </button>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => handleMoveCohort(idx, 'down')}
-                                                                            disabled={idx === cohorts.length - 1}
-                                                                            className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-25"
-                                                                            title="下へ移動"
-                                                                        >
-                                                                            <IconChevronDown />
-                                                                        </button>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => {
-                                                                                setEditingCohortId(c.id);
-                                                                                setEditingCohortName(c.name);
-                                                                            }}
-                                                                            className="p-1.5 text-slate-500 hover:text-blue-600 rounded hover:bg-blue-50"
-                                                                            title="期生名を変更"
-                                                                        >
-                                                                            <IconEdit />
-                                                                        </button>
-                                                                        {cohorts.length > 1 && (
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => setConfirmDeleteCohortId(confirmDeleteCohortId === c.id ? null : c.id)}
-                                                                                className="p-1.5 text-slate-400 hover:text-red-600 rounded hover:bg-red-50"
-                                                                                title="この期生のデータを完全に削除"
-                                                                            >
-                                                                                <IconTrash />
-                                                                            </button>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            )}
-
-                                                            {confirmDeleteCohortId === c.id && (
-                                                                <div className="mt-2 pt-2 border-t border-red-100 bg-red-50/70 p-2 rounded flex items-center justify-between text-xs">
-                                                                    <span className="text-red-700 font-bold">「{c.name}」の全試験データを削除しますか？</span>
-                                                                    <div className="flex gap-1.5">
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => handleDeleteCohort(c.id)}
-                                                                            className="bg-red-600 text-white font-bold px-2.5 py-1 rounded hover:bg-red-700"
-                                                                        >
-                                                                            削除実行
-                                                                        </button>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => setConfirmDeleteCohortId(null)}
-                                                                            className="bg-white text-slate-600 border border-slate-300 font-bold px-2 py-1 rounded"
-                                                                        >
-                                                                            キャンセル
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="p-3.5 bg-white border-t border-slate-200 flex justify-end">
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsCohortModalOpen(false)}
-                                            className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-lg transition-colors"
-                                        >
-                                            閉じる
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* --- CLASS COMPARISON MODAL (v5.3: 同一期生内 A組 vs B組 クラス間比較) --- */}
-                        {isClassCompareOpen && (
-                            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-40 p-2 sm:p-4" onClick={() => setIsClassCompareOpen(false)}>
+                        {/* --- STUDENT DASHBOARD MODAL (v5.5: 生徒向けダッシュボード) --- */}
+                        {isStudentDashboardOpen && (
+                            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-40 p-2 sm:p-4" onClick={() => setIsStudentDashboardOpen(false)}>
                                 <div
-                                    className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col overflow-hidden"
+                                    className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden"
                                     onClick={e => e.stopPropagation()}
                                 >
                                     <div className="bg-slate-900 text-white px-4 py-3 sm:px-6 sm:py-4 flex flex-wrap justify-between items-center gap-3 shrink-0">
                                         <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 bg-rose-600 text-white rounded-lg flex items-center justify-center font-extrabold shadow-inner shrink-0">
-                                                <IconUsers />
+                                            <div className="w-10 h-10 bg-cyan-600 text-white rounded-lg flex items-center justify-center font-extrabold shadow-inner shrink-0">
+                                                <IconDashboard />
                                             </div>
                                             <div>
                                                 <div className="flex items-center gap-2">
-                                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-500 text-white">
-                                                        同一期生内 クラス分析
+                                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-cyan-500 text-white">
+                                                        個人情報 非公開モード
                                                     </span>
                                                     <span className="text-xs text-slate-300 font-bold">
-                                                        {currentCohort.name}（A組 vs B組 多項目比較）
+                                                        ホームルーム等での振り返り・動機付け用
                                                     </span>
                                                 </div>
                                                 <h2 className="text-lg sm:text-xl font-bold leading-tight mt-0.5">
-                                                    クラス間比較（平均・中央値・最高/最低・分布・上位層シェア・通年推移）
+                                                    生徒向けダッシュボード（成績分布 ＆ 相関図）
                                                 </h2>
                                             </div>
                                         </div>
@@ -5883,14 +6054,7 @@
                                         <div className="flex items-center gap-2 ml-auto">
                                             <button
                                                 type="button"
-                                                onClick={triggerPrintClassCompare}
-                                                className="text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-3 rounded-lg border border-emerald-500 flex items-center gap-1.5 shadow-sm transition-colors"
-                                            >
-                                                <IconPrinter /> クラス比較シートを印刷 / PDF出力
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setIsClassCompareOpen(false)}
+                                                onClick={() => setIsStudentDashboardOpen(false)}
                                                 className="text-slate-400 hover:text-white transition-colors bg-slate-800 p-2 rounded-full shrink-0"
                                             >
                                                 <IconX />
@@ -5899,184 +6063,13 @@
                                     </div>
 
                                     <div className="p-4 sm:p-6 overflow-y-auto bg-slate-50 flex-1">
-                                        <ClassComparisonView
-                                            cohorts={visibleCohorts}
-                                            currentCohort={currentCohort}
-                                            onSelectCohort={(cId) => {
-                                                setSelectedCohortId(cId);
-                                                setSelectedStudentId(null);
-                                            }}
+                                        <StudentDashboardView
+                                            cohort={currentCohort}
                                             cohortExams={currentCohortExams}
                                             records={records}
-                                            classCompareConfig={classCompareConfig}
-                                            setClassCompareConfig={setClassCompareConfig}
-                                            isPrint={false}
+                                            dashboardConfig={dashboardConfig}
+                                            setDashboardConfig={setDashboardConfig}
                                         />
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* --- CROSS-COHORT COMPARISON MODAL (v5.0: 過年度比較 パターンA) --- */}
-                        {isCohortCompareOpen && (
-                            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-40 p-2 sm:p-4" onClick={() => setIsCohortCompareOpen(false)}>
-                                <div
-                                    className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col overflow-hidden"
-                                    onClick={e => e.stopPropagation()}
-                                >
-                                    <div className="bg-slate-900 text-white px-4 py-3 sm:px-6 sm:py-4 flex flex-wrap justify-between items-center gap-3 shrink-0">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 bg-indigo-600 text-white rounded-lg flex items-center justify-center font-extrabold shadow-inner shrink-0">
-                                                <IconChartBar />
-                                            </div>
-                                            <div>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-500 text-white">
-                                                        パターンA 世代間分析
-                                                    </span>
-                                                    <span className="text-xs text-slate-400">
-                                                        表示中の期生（{visibleCohorts.map(c => c.name).join(' / ')}）の比較
-                                                    </span>
-                                                </div>
-                                                <h2 className="text-lg sm:text-xl font-bold leading-tight mt-0.5">
-                                                    過年度比較（期生間 平均点・偏差値・推移比較）
-                                                </h2>
-                                            </div>
-                                        </div>
-
-                                        <div className="flex items-center gap-2 ml-auto">
-                                            <button
-                                                type="button"
-                                                onClick={() => setIsCohortModalOpen(true)}
-                                                className="text-xs bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold py-2 px-3 rounded-lg border border-slate-600 flex items-center gap-1.5 shadow-sm transition-colors"
-                                            >
-                                                <IconEye /> 期生の表示/非表示切替
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={triggerPrintCohortCompare}
-                                                className="text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-3 rounded-lg border border-emerald-500 flex items-center gap-1.5 shadow-sm transition-colors"
-                                            >
-                                                <IconPrinter /> 比較シートを印刷 / PDF出力
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setIsCohortCompareOpen(false)}
-                                                className="text-slate-400 hover:text-white transition-colors bg-slate-800 p-2 rounded-full shrink-0"
-                                            >
-                                                <IconX />
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <div className="p-4 sm:p-6 overflow-y-auto bg-slate-50 flex-1">
-                                        <CrossCohortComparisonView
-                                            cohorts={visibleCohorts}
-                                            exams={exams}
-                                            records={records}
-                                            compareConfig={compareConfig}
-                                            setCompareConfig={setCompareConfig}
-                                            isPrint={false}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* --- RANKING TABLE MODAL (v4.3 / v5.4) --- */}
-                        {isRankingOpen && selectedExamId && (
-                            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-40 p-2 sm:p-4" onClick={() => setIsRankingOpen(false)}>
-                                <div
-                                    className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col overflow-hidden"
-                                    onClick={e => e.stopPropagation()}
-                                >
-                                    {/* Modal Header */}
-                                    <div className="bg-slate-900 text-white px-4 py-3 sm:px-6 sm:py-4 flex flex-wrap justify-between items-center gap-3 shrink-0">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 bg-amber-500 text-slate-900 rounded-lg flex items-center justify-center font-extrabold shadow-inner shrink-0">
-                                                <IconTrophy />
-                                            </div>
-                                            <div>
-                                                <div className="flex items-center gap-2">
-                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded text-white ${activeTab === 'regular' ? 'bg-blue-500' : (activeTab === 'benesse' ? 'bg-green-500' : 'bg-purple-500')}`}>
-                                                        {activeTab === 'regular' ? '定期試験' : (activeTab === 'benesse' ? '学力推移調査' : '学期総合')}
-                                                    </span>
-                                                    <span className="text-xs text-slate-400">1位〜20位 ランキング表</span>
-                                                </div>
-                                                <h2 className="text-lg sm:text-xl font-bold leading-tight mt-0.5">{selectedExamName}</h2>
-                                            </div>
-                                        </div>
-
-                                        {/* 氏名表示/非表示切替 ＆ クラス絞り込み ＆ 印刷ボタン */}
-                                        <div className="flex flex-wrap items-center gap-2 ml-auto">
-                                            <button
-                                                type="button"
-                                                onClick={() => setIsRankingNameHidden(!isRankingNameHidden)}
-                                                className={`text-xs font-extrabold py-2 px-3 rounded-lg border flex items-center gap-1.5 shadow-sm transition-colors ${
-                                                    isRankingNameHidden
-                                                        ? 'bg-amber-500 text-slate-900 border-amber-400'
-                                                        : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-600'
-                                                }`}
-                                                title="保護者面談などで他の生徒の名前を隠したい時にワンタッチで切り替えられます（印刷にも反映されます）"
-                                            >
-                                                {isRankingNameHidden ? <IconEyeOff /> : <IconEye />}
-                                                <span>{isRankingNameHidden ? '氏名を非表示中（順位・点数のみ）' : '氏名を隠す'}</span>
-                                            </button>
-
-                                            {availableClasses.length > 1 && (
-                                                <div className="flex items-center bg-slate-800 p-1 rounded-lg border border-slate-700">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setRankingClassFilter('ALL')}
-                                                        className={`px-2.5 py-1 rounded text-xs font-bold transition-colors ${rankingClassFilter === 'ALL' ? 'bg-amber-500 text-slate-900 shadow' : 'text-slate-300 hover:text-white'}`}
-                                                    >
-                                                        学年全体
-                                                    </button>
-                                                    {availableClasses.map(c => (
-                                                        <button
-                                                            key={c}
-                                                            type="button"
-                                                            onClick={() => setRankingClassFilter(c)}
-                                                            className={`px-2.5 py-1 rounded text-xs font-bold transition-colors ${rankingClassFilter === c ? 'bg-amber-500 text-slate-900 shadow' : 'text-slate-300 hover:text-white'}`}
-                                                        >
-                                                            {c}組のみ
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            )}
-
-                                            <button
-                                                type="button"
-                                                onClick={triggerPrintRanking}
-                                                className="text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-3 rounded-lg border border-emerald-500 flex items-center gap-1.5 shadow-sm transition-colors"
-                                            >
-                                                <IconPrinter /> 掲示・配布用に印刷 / PDF出力
-                                            </button>
-
-                                            <button
-                                                type="button"
-                                                onClick={() => setIsRankingOpen(false)}
-                                                className="text-slate-400 hover:text-white transition-colors bg-slate-800 p-2 rounded-full shrink-0"
-                                            >
-                                                <IconX />
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    {/* Modal Body */}
-                                    <div className="p-4 sm:p-6 overflow-y-auto bg-slate-50 flex-1">
-                                        {currentExamRankingSections.map(sec => (
-                                            <RankingSectionView
-                                                key={sec.id}
-                                                section={sec}
-                                                isPrint={false}
-                                                hideNames={isRankingNameHidden}
-                                                onSelectStudent={(stuId) => {
-                                                    setIsRankingOpen(false);
-                                                    setSelectedStudentId(stuId);
-                                                }}
-                                            />
-                                        ))}
                                     </div>
                                 </div>
                             </div>
