@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BLEND 成績推移トラッカー v5.9</title>
+    <title>BLEND 成績推移トラッカー v6.0</title>
     <!-- React & Babelのバージョンを安定版に固定 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
@@ -96,7 +96,24 @@
 <body class="bg-slate-50 text-slate-800 font-sans min-h-screen">
     <div id="root"></div>
 
-    <script type="text/babel" data-presets="react">
+    <!-- Babelの500KB超過時の最適化解除メッセージ（CONSOLE_ERROR）を抑止し、大容量スクリプトを高速コンパイルするスクリプト -->
+    <script>
+        (function() {
+            const origError = console.error;
+            const origWarn = console.warn;
+            const isBabelDeoptMsg = (args) => args && args[0] && typeof args[0] === 'string' && args[0].includes('deoptimised the styling');
+            console.error = function(...args) {
+                if (isBabelDeoptMsg(args)) return;
+                origError.apply(console, args);
+            };
+            console.warn = function(...args) {
+                if (isBabelDeoptMsg(args)) return;
+                origWarn.apply(console, args);
+            };
+        })();
+    </script>
+
+    <script type="text/plain" id="app-babel-source">
         const { useState, useEffect, useMemo, useRef } = React;
 
         // --- ユーティリティ関数 ---
@@ -738,6 +755,7 @@
         const IconEyeOff = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>;
         const IconDashboard = () => <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>;
         const IconScatter = () => <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="7" cy="17" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="17" cy="7" r="2"></circle><line x1="3" y1="21" x2="21" y2="21"></line><line x1="3" y1="21" x2="3" y2="3"></line></svg>;
+        const IconTeacher = () => <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>;
 
         // 期生（コホート）別の3年周期カラーパレット定義（28期生=緑、29期生=赤、30期生=青）
         const COHORT_CYCLE_PALETTES = {
@@ -4075,6 +4093,401 @@
             );
         };
 
+        // --- 先生用ダッシュボード（面談・指導用：赤点・急降下アラート） ---
+        const TeacherDashboardView = ({
+            cohorts,
+            currentCohort,
+            onSelectCohort,
+            exams,
+            activeTab,
+            setActiveTab,
+            records,
+            config,
+            setConfig
+        }) => {
+            const { 
+                examId = '', 
+                classFilter = 'ALL', 
+                redMarkThreshold = 30, 
+                dropAlertThreshold = -20 
+            } = config;
+
+            const typeExams = useMemo(() => {
+                return exams.filter(e => (e.cohortId || cohorts[0].id) === currentCohort.id && (e.type || 'regular') === activeTab);
+            }, [exams, currentCohort, activeTab, cohorts]);
+
+            const activeExam = useMemo(() => {
+                if (typeExams.length === 0) return null;
+                return typeExams.find(e => e.id === examId) || typeExams[typeExams.length - 1];
+            }, [typeExams, examId]);
+
+            const previousExam = useMemo(() => {
+                if (!activeExam || typeExams.length <= 1) return null;
+                const idx = typeExams.findIndex(e => e.id === activeExam.id);
+                if (idx <= 0) return null;
+                return typeExams[idx - 1];
+            }, [activeExam, typeExams]);
+
+            useEffect(() => {
+                if (activeExam && examId !== activeExam.id) {
+                    setConfig(prev => ({ ...prev, examId: activeExam.id }));
+                }
+            }, [activeExam, examId]);
+
+            const availableClasses = useMemo(() => {
+                if (!activeExam) return [];
+                const clsSet = new Set();
+                records.filter(r => r.examId === activeExam.id).forEach(r => {
+                    if (r.class) clsSet.add(String(r.class).trim());
+                });
+                return Array.from(clsSet).sort();
+            }, [records, activeExam]);
+
+            const examRecords = useMemo(() => {
+                if (!activeExam) return [];
+                let recs = records.filter(r => r.examId === activeExam.id);
+                if (classFilter !== 'ALL') recs = recs.filter(r => String(r.class).trim() === classFilter);
+                return recs;
+            }, [records, activeExam, classFilter]);
+
+            const prevRecords = useMemo(() => {
+                if (!previousExam) return [];
+                let recs = records.filter(r => r.examId === previousExam.id);
+                if (classFilter !== 'ALL') recs = recs.filter(r => String(r.class).trim() === classFilter);
+                return recs;
+            }, [records, previousExam, classFilter]);
+
+            const baseSubjects = useMemo(() => {
+                const subSet = new Set();
+                examRecords.forEach(r => {
+                    if (r.scores) {
+                        Object.keys(r.scores).forEach(s => {
+                            if (!s.includes('席次') && !s.includes('順位') && !s.includes('総点') && !s.includes('平均')) {
+                                subSet.add(s);
+                            }
+                        });
+                    }
+                });
+                const arr = Array.from(subSet);
+                arr.sort((a, b) => {
+                    const idxA = SUBJECT_ORDER.indexOf(a);
+                    const idxB = SUBJECT_ORDER.indexOf(b);
+                    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                    if (idxA !== -1) return -1;
+                    if (idxB !== -1) return 1;
+                    return a.localeCompare(b);
+                });
+                return arr;
+            }, [examRecords]);
+
+            const { redMarkBySubject, redMarkByStudent, drops } = useMemo(() => {
+                const rmBySub = {};
+                const rmByStu = {};
+                const drps = [];
+
+                baseSubjects.forEach(sub => { rmBySub[sub] = []; });
+
+                examRecords.forEach(curr => {
+                    baseSubjects.forEach(sub => {
+                        const score = getStudentSubjectScore(curr, sub);
+                        if (score !== null && !isNaN(score) && score < redMarkThreshold) {
+                            rmBySub[sub].push({ ...curr, score });
+                            if (!rmByStu[curr.studentId]) {
+                                rmByStu[curr.studentId] = { studentId: curr.studentId, rawName: curr.rawName, class: curr.class, no: curr.no, subjects: [] };
+                            }
+                            rmByStu[curr.studentId].subjects.push({ subject: sub, score });
+                        }
+                    });
+
+                    if (previousExam) {
+                        const prev = prevRecords.find(p => p.studentId === curr.studentId);
+                        if (prev) {
+                            baseSubjects.forEach(sub => {
+                                const currScore = getStudentSubjectScore(curr, sub);
+                                const prevScore = getStudentSubjectScore(prev, sub);
+                                if (currScore !== null && prevScore !== null && !isNaN(currScore) && !isNaN(prevScore)) {
+                                    const diff = Math.round((currScore - prevScore)*10)/10;
+                                    if (diff <= dropAlertThreshold) {
+                                        drps.push({
+                                            studentId: curr.studentId,
+                                            rawName: curr.rawName,
+                                            class: curr.class,
+                                            no: curr.no,
+                                            subject: sub,
+                                            currScore: Math.round(currScore*10)/10,
+                                            prevScore: Math.round(prevScore*10)/10,
+                                            diff
+                                        });
+                                    }
+                                }
+                            });
+                        }
+                    }
+                });
+
+                Object.keys(rmBySub).forEach(sub => {
+                    rmBySub[sub].sort((a,b) => {
+                        if (a.score !== b.score) return a.score - b.score;
+                        return String(a.no).localeCompare(String(b.no));
+                    });
+                });
+                drps.sort((a, b) => a.diff - b.diff);
+                return { redMarkBySubject: rmBySub, redMarkByStudent: rmByStu, drops: drps };
+            }, [examRecords, prevRecords, baseSubjects, redMarkThreshold, dropAlertThreshold, previousExam]);
+
+            const multipleRedMarks = useMemo(() => {
+                return Object.values(redMarkByStudent)
+                    .filter(s => s.subjects.length >= 2)
+                    .sort((a,b) => {
+                        if (b.subjects.length !== a.subjects.length) return b.subjects.length - a.subjects.length;
+                        return String(a.no).localeCompare(String(b.no));
+                    });
+            }, [redMarkByStudent]);
+
+            return (
+                <div className="space-y-4">
+                    {/* 操作パネル */}
+                    <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                            {/* 期生切替 */}
+                            <div className="flex flex-wrap items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
+                                {cohorts.map((c, idx) => {
+                                    const pal = getCohortPalette(c, idx);
+                                    const isAct = c.id === currentCohort.id;
+                                    return (
+                                        <button
+                                            key={c.id}
+                                            type="button"
+                                            onClick={() => onSelectCohort(c.id)}
+                                            className={`px-2 py-0.5 rounded text-xs font-extrabold transition-all flex items-center gap-1.5 ${isAct ? `${pal.badge} text-white shadow` : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+                                        >
+                                            {c.name}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            
+                            {/* 試験種別 */}
+                            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
+                                {[
+                                    { id: 'regular', label: '定期試験' },
+                                    { id: 'benesse', label: '学力推移' },
+                                    { id: 'comprehensive', label: '学期総合' }
+                                ].map(t => (
+                                    <button
+                                        key={t.id}
+                                        onClick={() => setActiveTab(t.id)}
+                                        className={`px-2 py-0.5 rounded text-xs font-bold transition-all ${activeTab === t.id ? 'bg-slate-700 text-white shadow' : 'bg-transparent text-slate-600 hover:bg-white/60'}`}
+                                    >
+                                        {t.label}
+                                    </button>
+                                ))}
+                            </div>
+                            
+                            {/* 試験選択 */}
+                            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
+                                <select
+                                    value={activeExam ? activeExam.id : ''}
+                                    onChange={e => setConfig(prev => ({ ...prev, examId: e.target.value }))}
+                                    className="text-xs border border-slate-300 rounded px-2 py-0.5 bg-white font-bold outline-none text-slate-700 cursor-pointer"
+                                >
+                                    {typeExams.length === 0 && <option value="">データなし</option>}
+                                    {typeExams.map(ex => (
+                                        <option key={ex.id} value={ex.id}>{ex.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* クラス絞り込み＆閾値設定 */}
+                        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-100">
+                            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
+                                <span className="text-[11px] font-bold text-slate-500 px-1">クラス:</span>
+                                {['ALL', ...availableClasses].map(cls => (
+                                    <button
+                                        key={cls}
+                                        onClick={() => setConfig(prev => ({ ...prev, classFilter: cls }))}
+                                        className={`px-3 py-1 rounded text-[11px] font-bold transition-all ${classFilter === cls ? 'bg-blue-600 text-white shadow' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'}`}
+                                    >
+                                        {cls === 'ALL' ? '全体' : `${cls}組`}
+                                    </button>
+                                ))}
+                            </div>
+                            
+                            <div className="flex items-center gap-2 bg-rose-50 px-3 py-1 rounded-lg border border-rose-200">
+                                <span className="text-[11px] font-bold text-rose-700">赤点ライン:</span>
+                                <div className="flex items-center gap-1 text-xs">
+                                    <input 
+                                        type="number" 
+                                        value={redMarkThreshold} 
+                                        onChange={e => setConfig(prev => ({ ...prev, redMarkThreshold: Number(e.target.value) }))}
+                                        className="w-14 px-1 py-0.5 border border-rose-300 rounded text-center outline-none font-bold" 
+                                    />
+                                    <span className="text-rose-700 font-bold">点未満</span>
+                                </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-2 bg-amber-50 px-3 py-1 rounded-lg border border-amber-200">
+                                <span className="text-[11px] font-bold text-amber-700">急降下アラート:</span>
+                                <div className="flex items-center gap-1 text-xs">
+                                    <input 
+                                        type="number" 
+                                        value={dropAlertThreshold} 
+                                        onChange={e => setConfig(prev => ({ ...prev, dropAlertThreshold: Number(e.target.value) }))}
+                                        className="w-14 px-1 py-0.5 border border-amber-300 rounded text-center outline-none font-bold text-amber-700" 
+                                        step="5"
+                                    />
+                                    <span className="text-amber-700 font-bold">点以下</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* ダッシュボード本体 */}
+                    {!activeExam ? (
+                        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-6 min-h-[450px] flex items-center justify-center text-slate-400 font-bold text-sm">
+                            表示する試験データがありません。
+                        </div>
+                    ) : (
+                        <div className="flex flex-col gap-4">
+                            {/* 上段：赤点者リスト ＆ 複数赤点保有者 */}
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                                {/* 左側：教科別 赤点者リスト */}
+                                <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[500px]">
+                                    <div className="bg-rose-700 text-white px-4 py-2.5 flex justify-between items-center shrink-0">
+                                        <h3 className="font-bold text-sm flex items-center gap-2">
+                                            <span>🚨</span> 教科別 赤点（{redMarkThreshold}点未満）者リスト
+                                        </h3>
+                                        <span className="text-xs bg-rose-800 px-2 py-0.5 rounded-full">{classFilter === 'ALL' ? '学年全体' : `${classFilter}組`}</span>
+                                    </div>
+                                    <div className="p-4 overflow-y-auto flex-1 bg-slate-50">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {baseSubjects.map(sub => {
+                                                const list = redMarkBySubject[sub];
+                                                if (list.length === 0) return null;
+                                                return (
+                                                    <div key={sub} className="bg-white border border-rose-200 rounded-lg shadow-sm overflow-hidden">
+                                                        <div className="bg-rose-50 border-b border-rose-200 px-3 py-1.5 flex justify-between items-center">
+                                                            <span className="font-bold text-rose-900 text-sm">{sub}</span>
+                                                            <span className="text-xs font-extrabold text-rose-600 bg-white px-2 py-0.5 rounded-full border border-rose-200">{list.length}名</span>
+                                                        </div>
+                                                        <div className="p-0 max-h-48 overflow-y-auto">
+                                                            <table className="w-full text-xs text-left">
+                                                                <tbody className="divide-y divide-slate-100">
+                                                                    {list.map(s => (
+                                                                        <tr key={s.studentId} className="hover:bg-slate-50">
+                                                                            <td className="px-3 py-1.5 w-16 font-mono text-slate-500">{s.class}-{s.no}</td>
+                                                                            <td className="px-1 py-1.5 font-bold text-slate-700">{s.rawName}</td>
+                                                                            <td className="px-3 py-1.5 text-right w-16">
+                                                                                <span className="font-extrabold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-100">{s.score}</span>
+                                                                            </td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                            {baseSubjects.every(sub => redMarkBySubject[sub].length === 0) && (
+                                                <div className="col-span-full py-8 text-center text-slate-400 font-bold text-sm">
+                                                    赤点該当者はいません 🎉
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 右側：複数赤点保有者 */}
+                                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[500px]">
+                                    <div className="bg-slate-800 text-white px-4 py-2.5 flex justify-between items-center shrink-0">
+                                        <h3 className="font-bold text-sm flex items-center gap-2">
+                                            <span>⚠️</span> 要注意：複数赤点保有者
+                                        </h3>
+                                        <span className="text-xs font-bold text-amber-300">{multipleRedMarks.length}名</span>
+                                    </div>
+                                    <div className="p-0 overflow-y-auto flex-1 bg-white">
+                                        <ul className="divide-y divide-slate-100">
+                                            {multipleRedMarks.length === 0 ? (
+                                                <div className="py-8 text-center text-slate-400 font-bold text-sm">
+                                                    該当者なし
+                                                </div>
+                                            ) : (
+                                                multipleRedMarks.map(s => (
+                                                    <li key={s.studentId} className="p-3 hover:bg-slate-50 transition-colors">
+                                                        <div className="flex justify-between items-center mb-1">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-[10px] text-slate-500 font-mono bg-slate-100 px-1 rounded">{s.class}-{s.no}</span>
+                                                                <span className="font-bold text-slate-800 text-sm">{s.rawName}</span>
+                                                            </div>
+                                                            <span className="font-extrabold text-xs text-white bg-rose-600 px-2 py-0.5 rounded-full">
+                                                                {s.subjects.length}教科
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex flex-wrap gap-1 pl-1">
+                                                            {s.subjects.map((sub, i) => (
+                                                                <span key={i} className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded">
+                                                                    {sub.subject} ({sub.score})
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    </li>
+                                                ))
+                                            )}
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 下段：急降下アラート */}
+                            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                                <div className="bg-amber-600 text-white px-4 py-2.5 flex justify-between items-center">
+                                    <h3 className="font-bold text-sm flex items-center gap-2">
+                                        <span>📉</span> 急降下アラート（前回比 {dropAlertThreshold}点以下）
+                                    </h3>
+                                    <span className="text-xs bg-amber-700 px-2 py-0.5 rounded-full">{drops.length}件の兆候</span>
+                                </div>
+                                <div className="p-0 overflow-x-auto max-h-64 overflow-y-auto">
+                                    <table className="w-full text-xs text-left whitespace-nowrap">
+                                        <thead className="bg-amber-50 text-amber-900 sticky top-0 shadow-sm">
+                                            <tr>
+                                                <th className="px-4 py-2 font-bold w-20">クラス-番号</th>
+                                                <th className="px-4 py-2 font-bold w-32">氏名</th>
+                                                <th className="px-4 py-2 font-bold">急降下科目</th>
+                                                <th className="px-4 py-2 font-bold text-right w-20">{previousExam ? previousExam.name : '前回'}</th>
+                                                <th className="px-4 py-2 font-bold text-right w-20">今回</th>
+                                                <th className="px-4 py-2 font-bold text-right w-24">差分</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {!previousExam ? (
+                                                <tr><td colSpan="6" className="px-4 py-8 text-center text-slate-400 font-bold text-sm">前回試験のデータがありません</td></tr>
+                                            ) : drops.length === 0 ? (
+                                                <tr><td colSpan="6" className="px-4 py-8 text-center text-slate-400 font-bold text-sm">該当する急降下はありません 👏</td></tr>
+                                            ) : (
+                                                drops.map((d, i) => (
+                                                    <tr key={i} className="hover:bg-amber-50/30">
+                                                        <td className="px-4 py-2 font-mono text-slate-500">{d.class}-{d.no}</td>
+                                                        <td className="px-4 py-2 font-bold text-slate-700">{d.rawName}</td>
+                                                        <td className="px-4 py-2 font-bold text-slate-800">{d.subject}</td>
+                                                        <td className="px-4 py-2 text-right font-mono text-slate-500">{d.prevScore}</td>
+                                                        <td className="px-4 py-2 text-right font-mono text-slate-800 font-bold">{d.currScore}</td>
+                                                        <td className="px-4 py-2 text-right font-mono font-extrabold text-red-600 bg-red-50/50">
+                                                            {d.diff}
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
         // --- ランキング表セクション表示コンポーネント（画面＆印刷共用） ---
         const RankingSectionView = ({ section, isPrint = false, onSelectStudent = null, hideNames = false }) => {
             if (!section || !section.columns || section.columns.length === 0) return null;
@@ -4401,6 +4814,15 @@
                 growthSubject: '数学'
             });
 
+            // Teacher Dashboard State (v6.0)
+            const [isTeacherDashboardOpen, setIsTeacherDashboardOpen] = useState(false);
+            const [teacherDashConfig, setTeacherDashConfig] = useState({
+                examId: '',
+                classFilter: 'ALL',
+                redMarkThreshold: 30,
+                dropAlertThreshold: -20
+            });
+
             // Settings & Sync State
             const [isSettingsOpen, setIsSettingsOpen] = useState(false);
             const [isFirebaseConfigOpen, setIsFirebaseConfigOpen] = useState(true);
@@ -4415,9 +4837,58 @@
                 return () => document.removeEventListener('click', handleClickOutside);
             }, []);
 
+            // Generate dummy data function
+            const generateDummyData = () => {
+                const genCohorts = [
+                    { id: 'c30', name: '30期生', order: 0 },
+                    { id: 'c29', name: '29期生', order: 1 },
+                    { id: 'c28', name: '28期生', order: 2 },
+                ];
+                const genExams = [];
+                const genRecords = [];
+                const subjects = ['国語', '社会', '数学', '理科', '英語'];
+                
+                genCohorts.forEach(c => {
+                    const exam1 = { id: `e1_${c.id}`, name: '1年1学期中間', type: 'regular', cohortId: c.id, order: 0 };
+                    const exam2 = { id: `e2_${c.id}`, name: '1年1学期期末', type: 'regular', cohortId: c.id, order: 1 };
+                    genExams.push(exam1, exam2);
+
+                    ['A', 'B'].forEach(cls => {
+                        for(let i=1; i<=10; i++) {
+                            const studentId = `s_${c.id}_${cls}_${i}`;
+                            const rawName = `${c.name.replace('期生','')}期 ${cls}組${i}番`;
+                            const base = 40 + Math.random() * 40; 
+                            
+                            const scores1 = {};
+                            const scores2 = {};
+                            
+                            subjects.forEach(sub => {
+                                let s1 = Math.min(100, Math.max(0, Math.round(base + (Math.random()*30 - 15))));
+                                let s2 = Math.min(100, Math.max(0, Math.round(s1 + (Math.random()*40 - 20))));
+                                if (Math.random() < 0.1) s1 = Math.round(Math.random() * 29); 
+                                if (Math.random() < 0.1) s2 = Math.round(Math.random() * 29); 
+                                if (Math.random() < 0.1) s2 = Math.max(0, s1 - 25); 
+                                scores1[sub] = s1;
+                                scores2[sub] = s2;
+                            });
+                            
+                            scores1['5教科総点'] = subjects.reduce((a,b)=>a+scores1[b],0);
+                            scores1['5教科平均点'] = scores1['5教科総点']/5;
+                            scores2['5教科総点'] = subjects.reduce((a,b)=>a+scores2[b],0);
+                            scores2['5教科平均点'] = scores2['5教科総点']/5;
+
+                            genRecords.push({ examId: exam1.id, studentId, rawName, grade: '1', class: cls, no: i, scholarship: '', scores: scores1 });
+                            genRecords.push({ examId: exam2.id, studentId, rawName, grade: '1', class: cls, no: i, scholarship: '', scores: scores2 });
+                        }
+                    });
+                });
+                return { cohorts: genCohorts, exams: genExams, records: genRecords };
+            };
+
             // Load data from localStorage
             useEffect(() => {
                 let loadedCohorts = [{ id: 'cohort_default', name: '29期生', order: 0 }];
+                let hasSavedExams = false;
                 try {
                     const savedCohorts = localStorage.getItem('blend_cohorts');
                     if (savedCohorts) {
@@ -4446,17 +4917,29 @@
                             type: e.type || 'regular',
                             cohortId: e.cohortId || fallbackCohortId
                         }));
-                        setExams(parsedExams);
+                        if (parsedExams.length > 0) {
+                            hasSavedExams = true;
+                            setExams(parsedExams);
+                        }
                     }
                 } catch(e) { console.error("Error parsing exams from local storage", e); }
 
                 try {
                     const savedRecords = localStorage.getItem('blend_records');
-                    if (savedRecords) {
+                    if (savedRecords && hasSavedExams) {
                         const parsedRecords = JSON.parse(savedRecords);
                         setRecords(migrateRecords(parsedRecords));
                     }
                 } catch(e) { console.error("Error parsing records from local storage", e); }
+
+                // 初回起動時（保存データが空の場合）はサンプルデータを自動セット
+                if (!hasSavedExams) {
+                    const dummy = generateDummyData();
+                    setCohorts(dummy.cohorts);
+                    setSelectedCohortId(dummy.cohorts[0].id);
+                    setExams(dummy.exams);
+                    setRecords(dummy.records);
+                }
 
                 try {
                     const savedFbConfig = localStorage.getItem('blend_firebase_config');
@@ -5713,7 +6196,7 @@
                                 <div className="bg-blue-600 p-2 rounded-lg shrink-0">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                                 </div>
-                                <h1 className="text-xl font-bold tracking-wider hidden lg:block whitespace-nowrap">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-1">v5.9</span></h1>
+                                <h1 className="text-xl font-bold tracking-wider hidden lg:block whitespace-nowrap">BLEND 成績推移トラッカー <span className="text-sm font-normal text-slate-400 ml-1">v6.0</span></h1>
 
                                 {/* 期生（学年）クイック切替＆管理バー（3年周期カラー対応・非表示期生は除外） */}
                                 <div className="flex items-center bg-slate-800 rounded-lg p-1 border border-slate-700 gap-1 ml-1">
@@ -5951,6 +6434,16 @@
                                                     className="text-xs bg-rose-50 hover:bg-rose-100 text-rose-800 font-extrabold py-1.5 px-3 rounded border border-rose-300 flex items-center gap-1.5 shadow-sm transition-colors"
                                                 >
                                                     <IconUsers /> A組・B組 クラス比較
+                                                </button>
+                                                <button 
+                                                    onClick={() => {
+                                                        setTeacherDashConfig(prev => ({ ...prev, examId: selectedExamId || '' }));
+                                                        setIsTeacherDashboardOpen(true);
+                                                    }}
+                                                    className="text-xs bg-rose-600 hover:bg-rose-500 text-white font-extrabold py-1.5 px-3 rounded border border-rose-500 flex items-center gap-1.5 shadow-sm transition-colors"
+                                                    title="面談・指導用に赤点や急降下をリストアップします"
+                                                >
+                                                    <IconTeacher /> 先生用ダッシュボード
                                                 </button>
                                                 <button 
                                                     onClick={() => {
@@ -6669,11 +7162,11 @@
                             </div>
                         )}
 
-                        {/* --- CLASS COMPARE MODAL --- */}
+                        {/* --- CLASS COMPARE MODAL (同一期生内 A組 vs B組 比較) --- */}
                         {isClassCompareOpen && (
                             <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-40 p-2 sm:p-4" onClick={() => setIsClassCompareOpen(false)}>
                                 <div
-                                    className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden"
+                                    className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col overflow-hidden"
                                     onClick={e => e.stopPropagation()}
                                 >
                                     <div className="bg-slate-900 text-white px-4 py-3 sm:px-6 sm:py-4 flex flex-wrap justify-between items-center gap-3 shrink-0">
@@ -6683,7 +7176,7 @@
                                             </div>
                                             <div>
                                                 <h2 className="text-lg sm:text-xl font-bold leading-tight mt-0.5">
-                                                    クラス間比較（A組 vs B組）
+                                                    {currentCohort.name} クラス間比較（A組 vs B組）
                                                 </h2>
                                             </div>
                                         </div>
@@ -6714,7 +7207,7 @@
                                                 setSelectedCohortId(id);
                                                 setSelectedStudentId(null);
                                             }}
-                                            cohortExams={exams.filter(e => (e.cohortId || cohorts[0].id) === currentCohort.id)}
+                                            cohortExams={currentCohortExams}
                                             records={records}
                                             classCompareConfig={classCompareConfig}
                                             setClassCompareConfig={setClassCompareConfig}
@@ -6725,7 +7218,7 @@
                             </div>
                         )}
 
-                        {/* --- STUDENT DASHBOARD MODAL (v5.5: 生徒向けダッシュボード) --- */}
+                        {/* --- STUDENT DASHBOARD MODAL (生徒向け匿名ダッシュボード) --- */}
                         {isStudentDashboardOpen && (
                             <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-40 p-2 sm:p-4" onClick={() => setIsStudentDashboardOpen(false)}>
                                 <div
@@ -6740,14 +7233,14 @@
                                             <div>
                                                 <div className="flex items-center gap-2">
                                                     <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-cyan-500 text-white">
-                                                        個人情報 非公開モード
+                                                        ホームルーム投影用
                                                     </span>
-                                                    <span className="text-xs text-slate-300 font-bold">
-                                                        ホームルーム等での振り返り・動機付け用
+                                                    <span className="text-xs text-emerald-300 font-bold">
+                                                        🔒 生徒の個人名・出席番号は一切表示されません
                                                     </span>
                                                 </div>
                                                 <h2 className="text-lg sm:text-xl font-bold leading-tight mt-0.5">
-                                                    生徒向けダッシュボード（成績分布 ＆ 相関図）
+                                                    生徒向けダッシュボード（{currentCohort.name}）
                                                 </h2>
                                             </div>
                                         </div>
@@ -6777,6 +7270,64 @@
                                             records={records}
                                             dashboardConfig={dashboardConfig}
                                             setDashboardConfig={setDashboardConfig}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* --- TEACHER DASHBOARD MODAL (v6.0: 先生用ダッシュボード) --- */}
+                        {isTeacherDashboardOpen && (
+                            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-40 p-2 sm:p-4" onClick={() => setIsTeacherDashboardOpen(false)}>
+                                <div
+                                    className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col overflow-hidden"
+                                    onClick={e => e.stopPropagation()}
+                                >
+                                    <div className="bg-slate-900 text-white px-4 py-3 sm:px-6 sm:py-4 flex flex-wrap justify-between items-center gap-3 shrink-0">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-rose-600 text-white rounded-lg flex items-center justify-center font-extrabold shadow-inner shrink-0">
+                                                <IconTeacher />
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-500 text-white">
+                                                        面談・指導用ツール
+                                                    </span>
+                                                    <span className="text-xs text-slate-300 font-bold">
+                                                        ※生徒の個人情報が表示されます
+                                                    </span>
+                                                </div>
+                                                <h2 className="text-lg sm:text-xl font-bold leading-tight mt-0.5">
+                                                    先生用ダッシュボード（赤点・急降下アラート抽出）
+                                                </h2>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-2 ml-auto">
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsTeacherDashboardOpen(false)}
+                                                className="text-slate-400 hover:text-white transition-colors bg-slate-800 p-2 rounded-full shrink-0"
+                                            >
+                                                <IconX />
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-4 sm:p-6 overflow-y-auto bg-slate-50 flex-1">
+                                        <TeacherDashboardView
+                                            cohorts={visibleCohorts}
+                                            currentCohort={currentCohort}
+                                            onSelectCohort={(id) => {
+                                                setSelectedCohortId(id);
+                                                setSelectedStudentId(null);
+                                            }}
+                                            exams={exams}
+                                            activeTab={activeTab}
+                                            setActiveTab={setActiveTab}
+                                            records={records}
+                                            config={teacherDashConfig}
+                                            setConfig={setTeacherDashConfig}
                                         />
                                     </div>
                                 </div>
@@ -7044,6 +7595,23 @@
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
+    </script>
+
+    <!-- Babel Standalone の 500KB 制限を解除（compact: true）してコンパイルを実行 -->
+    <script>
+        (function() {
+            const scriptEl = document.getElementById('app-babel-source');
+            if (scriptEl && window.Babel) {
+                const compiled = Babel.transform(scriptEl.textContent, {
+                    presets: ['react'],
+                    compact: true,
+                    comments: false
+                }).code;
+                const execScript = document.createElement('script');
+                execScript.text = compiled;
+                document.body.appendChild(execScript);
+            }
+        })();
     </script>
 </body>
 </html>
